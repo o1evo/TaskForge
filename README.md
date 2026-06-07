@@ -10,14 +10,13 @@ across **three tabs that share one `reviews/<id>/` directory**:
 |-----|-----------|-----------------|--------------|
 | **Log** | a bespoke, interactive React work-log page (status, findings, timeline, follow-ups) with chat threads anchored to any text | `reviews/<id>/Page.jsx` | `work-log-v2` skill |
 | **Code Review** | an annotated diff with per-hunk / per-line / per-finding chat threads | `reviews/<id>/thread.json` | `code-review-tool` skill |
-| **QA Plan** | a plain-Markdown QA test plan with a **Copy markdown** button (lift it into ClickUp/email) | `reviews/<id>/qa-plan.md` | hand-written markdown |
+| **QA Plan** | a plain-Markdown QA test plan with a **Copy markdown** button (lift it into a ticket/email) | `reviews/<id>/qa-plan.md` | hand-written markdown |
 
 In every tab a *separate Claude Code session* (the "reviewer") joins the chat by
 reading and writing one plain JSON file (`thread.json`). No data ever leaves this
-machine: **no MCP, no external API, no outbound network calls.** The diffs are
-proprietary source.
+machine: **no MCP, no external API, no outbound network calls** — the source under
+review never goes anywhere.
 
-- **Location:** `/Users/kassiter/code/CodeReviews`
 - **Stack:** Vite + React frontend; the "backend" is a Vite dev-server
   *middleware plugin* ([vite.config.mjs](vite.config.mjs) → [server/api.mjs](server/api.mjs)),
   so the whole tool is one process. Deps: `react`, `react-dom`, `vite`,
@@ -28,13 +27,31 @@ proprietary source.
 ## Run it
 
 ```bash
+git clone <this-repo> && cd CodeReviews
 npm install
-npm run review      # starts Vite + the file-bridge API on http://127.0.0.1:5174
+npm run review            # starts Vite + the file-bridge API on http://127.0.0.1:5174
+npm run install-skill     # OPTIONAL — see "Skills" below
 ```
 
 Open the printed URL. The app hosts **multiple reviews at once** — pick one from
 the header switcher dropdown (shown when more than one exists); the 3s poll is
 scoped to the selected id.
+
+**Requirements:** Node 18+ (the scripts use `node:` built-ins and `import.meta`).
+
+### Skills (the reviewer/author automation)
+
+Two Claude Code skills ship **inside this repo** under
+[.claude/skills/](.claude/skills/):
+
+- **`code-review-tool`** — the reviewer bridge: answer threads, import / refresh /
+  seed diffs (see "Participating as the reviewer").
+- **`work-log-v2`** — author the Log page + QA plan for a task.
+
+When you run Claude Code **inside this repo**, project-level skills are
+auto-discovered — **nothing to install.** To also drive reviews from *other*
+repos, run `npm run install-skill` to symlink them into `~/.claude/skills/`
+(`--copy` to copy instead, `--force` to replace an existing one).
 
 ## How it works (poll-based liveness)
 
@@ -80,8 +97,9 @@ source. There is no database, no in-memory cache, no `localStorage`/cookies.
 Restarting the server or reloading the tab changes nothing — both rebuild from
 these files. (`reviews/seeds/*.json` are curated annotation inputs for `import`.)
 
-By convention `<id>` is the ClickUp id lowercased, e.g. `cu-86ah0tff9`. Using the
-same id for all three tabs is what pairs the work log, its diff, and its QA plan.
+By convention `<id>` is a short lowercase slug — a ticket id, an issue number, or
+any stable name (e.g. `cu-1234`, `issue-42`, `auth-refactor`). Using the same id
+for all three tabs is what pairs the work log, its diff, and its QA plan.
 
 ## Data model (`thread.json`)
 
@@ -209,14 +227,15 @@ two layers, both local-only and append-oriented:
    valid JSON. Append-only — never edit/delete existing messages or `diff` text;
    never send content off-machine.
 
-2. **The `code-review-tool` skill** (recommended) — a user-level skill at
-   `/Users/kassiter/.claude/skills/code-review-tool/` that automates the same
-   protocol safely. It auto-triggers when you ask Claude to "answer the review
-   questions," "reply in the review app," import/seed a diff, etc. It ships
-   helper scripts so you never hand-write into the file:
+2. **The `code-review-tool` skill** (recommended) — ships in-repo at
+   [.claude/skills/code-review-tool/](.claude/skills/code-review-tool/) and
+   automates the same protocol safely. It auto-triggers when you ask Claude to
+   "answer the review questions," "reply in the review app," import/seed a diff,
+   etc. It ships helper scripts so you never hand-write into the file (run them
+   from the repo root; they resolve the review root automatically):
 
    ```bash
-   S=/Users/kassiter/.claude/skills/code-review-tool/scripts
+   S=.claude/skills/code-review-tool/scripts
    node $S/list_pending.mjs --id <review-id>                       # see unanswered author msgs
    node $S/answer.mjs --id <review-id> --msg <author-msg-id|next> --file reply.txt
    ```
@@ -243,19 +262,23 @@ reads and stop two UI posts from interleaving, but they do **not** solve a
 *lost update* (last-writer-wins) between two long-window whole-file writers on
 the same file. Using `answer.mjs` (read-just-before-write) is the mitigation.
 
-## Seeded examples
+## Try it
 
-Two reviews currently live in `reviews/`:
-
-| id | repo / branch | story |
-|----|---------------|-------|
-| `cu-86ah0tff9` | `/Users/kassiter/code/f2` · `…ov-resilient-job-enqueue-fallback…` | job-enqueue resilience, seeded with self-review findings |
-| `cu-86ah9wzab` | `/Users/kassiter/code/f2-parallel/f2` · `…ov-duplicate-s3-buckets-us-east-2-v2…` | S3 us-east-2 buckets |
-
-Regenerate the first (with its curated findings):
+Point it at any local git repo with a change to review (`<id>` is any short
+lowercase slug):
 
 ```bash
-node bin/import.mjs --repo /Users/kassiter/code/f2 --base main --head WORKTREE \
-  --title "Resilient job enqueue fallback (CU-86ah0tff9)" \
-  --id CU-86ah0tff9 --seed reviews/seeds/CU-86ah0tff9.json --force
+# Review uncommitted work in some repo:
+node bin/import.mjs --repo /path/to/repo --base main --head WORKTREE \
+  --id my-change --title "My change"
+npm run review        # open http://127.0.0.1:5174 and pick "my-change"
 ```
+
+To seed curated findings as annotations, write a seed JSON (shape in
+[.claude/skills/code-review-tool/references/thread-format.md](.claude/skills/code-review-tool/references/thread-format.md))
+and pass `--seed reviews/seeds/<id>.json`. Everything under `reviews/` is
+gitignored, so your diffs and conversations never get committed.
+
+## License
+
+[MIT](LICENSE).

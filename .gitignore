@@ -1,5 +1,9 @@
-# Review data contains proprietary source under review — never commit it.
+# Review data contains the source under review — never commit it.
 reviews/
+
+# Per-machine Claude Code settings (personal paths / allowlist). The committed
+# skills under .claude/skills/ ARE tracked; only the local settings are ignored.
+.claude/settings.local.json
 
 node_modules/
 dist/

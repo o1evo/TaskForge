@@ -6,8 +6,10 @@
   "description": "Work Command Center — local, private work hub: interactive work-log page, file-bridge code review, and QA plan per task, with a Claude reviewer chat.",
   "scripts": {
     "review": "vite",
-    "import": "node bin/import.mjs"
+    "import": "node bin/import.mjs",
+    "install-skill": "node bin/install-skill.mjs"
   },
+  "license": "MIT",
   "dependencies": {
     "@babel/standalone": "^7.29.7",
     "marked": "^18.0.5",
