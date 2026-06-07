@@ -6,7 +6,7 @@ description: Track multi-step work as an interactive page in the Work Command Ce
 # Work Log v2 — Work Command Center
 
 The work log is a **bespoke interactive React page** that Claude authors per task and renders
-live in the **Work Command Center** app (the CodeReviews app). Each task has tabs that share
+live in the **Work Command Center** app (this repo, `code-reviews`). Each task has tabs that share
 one id:
 
 - **Log** — the page you author (`reviews/<id>/Page.jsx`): findings, timeline, follow-ups,

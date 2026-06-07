@@ -244,7 +244,7 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 .line-thread-close { margin-left: 4px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; }
 .line-thread-close:hover { color: var(--text); }
 
-/* ── Work Control Center: tabs, brand, bespoke Log pages ───────────────── */
+/* ── Work Command Center: tabs, brand, bespoke Log pages ───────────────── */
 
 .brand {
   font-size: 11px; letter-spacing: .08em; text-transform: uppercase;

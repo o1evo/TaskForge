@@ -107,7 +107,7 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-left">
-          <div className="brand">Work Control Center</div>
+          <div className="brand">Work Command Center</div>
           <h1>{review.title}</h1>
           <div className="review-meta">
             <code>{review.base} → {review.head}</code>
