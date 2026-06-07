@@ -1,0 +1,166 @@
+# Authoring a Work Command Center page (`reviews/<id>/Page.jsx`)
+
+A page is real React, transformed from JSX in the browser (Babel-standalone) and rendered live.
+Edit the file → it re-renders on the app's 3s poll. No build, no restart.
+
+## The contract (keep it exactly)
+
+```jsx
+// reviews/<id>/Page.jsx
+function Page({ wcc }) {
+  const [tab, setTab] = useState('findings');   // hooks are in scope, no import
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h2>{wcc.review.title}</h2>
+      {/* … */}
+    </div>
+  );
+}
+```
+
+Rules — the runtime is deliberately tiny, so follow these or it won't load:
+
+- **Define `function Page({ wcc }) { … }`** (a function declaration named `Page`). It is the
+  component the app renders.
+- **No `import` / no `export`.** Everything you need is injected into scope. (If you slip one in,
+  the runtime strips it rather than failing — but don't rely on that; you can't import packages.)
+- **In scope:** `React` and the hooks `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`
+  (so write `useState(…)`, not `React.useState(…)` — though both work). And the `wcc` prop.
+- **Helpers at file top level are fine.** You may declare extra components / style objects outside
+  `Page` (e.g. `function Pill({children}){…}` or `const h2 = { fontSize: 15 }`) and reference them
+  inside `Page` — they share the same scope. Just don't `export` them.
+
+## The `wcc` page API
+
+`wcc` is rebuilt from the latest polled data on every render, so anything you read from it is live.
+
+| Member | What it is |
+|--------|-----------|
+| `wcc.id` | the task id, e.g. `"cu-1234"` |
+| `wcc.review` | `{ id, title, repo, base, head, createdAt }` from `thread.json` |
+| `wcc.hunks` | the diff hunks (same data the Code Review tab renders) |
+| `wcc.threads` | all chat threads, keyed by thread key (object) |
+| `wcc.Thread` | **component** — an anchored chat (see below) |
+| `wcc.Markdown` | **component** — `<wcc.Markdown text="…" />` renders full Markdown (headings, lists, GFM tables, task lists, blockquotes, links, Prism-highlighted fenced code) |
+| `wcc.send(target, text)` | post a `role:"author"` message programmatically; returns a promise |
+| `wcc.createAnchor({ key, quote, prefix, suffix })` | create a free-selection comment anchor (the comment layer uses this; rarely called by hand) |
+| `wcc.setAnchorState(key, state)` | set a comment's `state` — `open` / `resolved` / `hidden` |
+
+### Chat threads — the v2 superpower
+
+A page has two kinds of anchored chat, both answered by the reviewer Claude session through the
+same file-bridge as code-review threads. **Prefer free-selection comments** — only reach for a
+pinned `<wcc.Thread>` when a discussion must always be visible at a known spot.
+
+**1. Free-selection comments (built-in app behavior — you write no code for these).**
+Anyone selects any text on the rendered page → a **💬 Comment** button → a popover chat anchored to
+that text, with a highlight. Resolve / hide per comment. Implemented by the app's comment layer
+([src/components/CommentLayer.jsx](../../../../src/components/CommentLayer.jsx) +
+[src/anchors.js](../../../../src/anchors.js)) — it works over *any* page regardless of what you
+authored. You don't call an API for these; just write good prose and the reader comments on it.
+(You, as Claude, can also create one programmatically via `wcc.createAnchor({ key, quote, prefix,
+suffix })` + `wcc.send(key, text)`, but that's rarely needed.)
+
+**2. Pinned author thread — `<wcc.Thread>`.**
+
+```jsx
+<wcc.Thread target="log:requeue-ordering" title="Discuss: enqueue-then-destroy ordering" />
+```
+
+- `target` is **required** and must match `^log:[a-z0-9:_-]+$` (lowercase, digits, `-_:`). You own
+  this anchor space — pick a stable, meaningful slug per discussion (`log:<topic>`).
+- `title` (optional) labels the thread and shows an unanswered-count badge.
+- `compact` (optional, default `true`) renders a tighter input.
+
+**Data model (both kinds).** Messages live in `thread.json` under `threads["log:<key>"]`. Free
+selections additionally record `anchors["log:<key>"] = { quote, prefix, suffix, state }` so the
+highlight can be re-located. Everything persists across reloads (unlike local React state).
+
+**Re-attachment & the "outdated" state.** A comment re-attaches by finding its stored `quote` in the
+rendered text (using `prefix`/`suffix` to disambiguate repeats). If you edit the page and a quoted
+passage changes or disappears, that comment is flagged **outdated** (an "N outdated" chip) rather
+than silently dropped. So when revising a section that has live comments, **preserve the quoted
+phrasing where you can**, or resolve the comment first.
+
+## Styling
+
+The app theme is dark (GitHub-ish). Either use inline styles with hex, or the app's CSS variables
+so pages match the chrome:
+
+```
+--text #c9d1d9   --muted #8b949e   --border #30363d   --panel #161b22   --panel-2 #1c2129
+--blocker #f85149   --high #db6d28   --medium #d29922   --low #3fb950   --resolved #2ea043
+```
+
+e.g. `style={{ color: 'var(--muted)', border: '1px solid var(--border)' }}`.
+
+## QA Plan — a markdown file, not JSX
+
+The QA plan is **not** part of `Page.jsx`. It is a plain markdown file `reviews/<id>/qa-plan.md` that
+the app renders in its own **QA Plan** tab (third tab, beside Log and Code Review) with a **Copy
+markdown** button. You write markdown; the app handles rendering and copying. Nothing to code.
+
+Why markdown and not a bespoke page: a QA plan is a hand-off document QA copies out and owns
+elsewhere — markdown is portable, diffable, and pasteable; JSX is none of those. The rendered
+GitHub task-list checkboxes (`- [ ]`) are read-only; the `.md` is the source of truth.
+
+Content shape (full guidance in `SKILL.md` → "QA Plan tab"):
+
+```markdown
+# QA Test Plan — <feature>
+
+<goal — what QA is confirming>
+
+## P0 — Smoke (must pass)
+
+### S1. <capability>
+- **Do:** <action / how to inject the fault>
+- **Pass:** <what QA should see>
+- **Hits:** <infra exercised — load balancer, database, cache, object store, …>
+
+## P1 — Core behavior
+## P2 — Edge cases
+- [ ] <checklist item>
+
+## Rollback triggers
+## Sign-off
+- [ ] P0 on staging — QA, date
+## Systems covered
+- `app/...` — <what it covers>
+```
+
+The same renderer also backs `wcc.Markdown`, so a Log page can drop rich markdown inline:
+`<wcc.Markdown text={`## notes\n- a\n- b`} />`.
+
+## Live reload, errors, and iteration
+
+- Save `Page.jsx` → the app re-renders within ~3s (it polls `_mtime`, which now covers `Page.jsx`).
+- **Compile error** (bad JSX/syntax) → a red panel with the message; the rest of the app keeps working.
+- **Runtime throw** (page crashes while rendering) → an error-boundary panel with the stack. Fix the
+  file and it recovers on the next poll. You will never white-screen the app.
+- Keep state that must survive a reload in the **source** (you edit it) or in a **thread message** —
+  `useState` is ephemeral.
+
+## Sanity-check before relying on it
+
+You can compile-check a page exactly as the runtime does, without a browser (from the repo root):
+
+```bash
+node --input-type=module -e "
+import * as Babel from '@babel/standalone';
+import { readFileSync } from 'node:fs';
+const src = readFileSync('reviews/<id>/Page.jsx','utf8')
+  .replace(/^\s*import\s.*\$/gm,'').replace(/export\s+default\s+/g,'');
+const { code } = Babel.transform(src, { presets:['react'], filename:'Page.jsx' });
+new Function('React','const {useState,useEffect,useRef,useMemo,useCallback}=React;\n'+code+';return Page;');
+console.log('compiles OK');
+"
+```
+
+## The runtime that defines exactly what's in scope
+
+```
+src/components/PageRuntime.jsx   (see buildWcc + HOOK_PREAMBLE)
+```
+
+Copy an existing page from `reviews/<id>/Page.jsx` as a starting template once you have one.
