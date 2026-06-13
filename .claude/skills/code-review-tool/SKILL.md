@@ -65,7 +65,7 @@ After writing, the open page shows the reply on its next poll — no restart, no
 ## Start / open the app
 
 ```bash
-npm run review   # from the repo root → Vite dev on http://127.0.0.1:5174 (or next free port)
+npm run review   # from the repo root → Vite dev on http://127.0.0.1:8473 (or http://wcc.test:8473; set WCC_PORT to change)
 ```
 Then open the review id shown in the UI. If it's already running, just open the URL.
 

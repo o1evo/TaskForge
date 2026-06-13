@@ -29,9 +29,15 @@ review never goes anywhere.
 ```bash
 git clone <this-repo> && cd CodeReviews
 npm install
-npm run review            # starts Vite + the file-bridge API on http://127.0.0.1:5174
-npm run install-skill     # make the skills global — needed to drive WCC from OTHER repos (see "Skills")
+npm run setup             # one step: install deps + make the skills global + offer a hosts alias
+npm run review            # starts Vite + the file-bridge API on http://127.0.0.1:8473
 ```
+
+`npm run setup` also asks whether to add a `127.0.0.1 wcc.test` line to `/etc/hosts`
+(sudo, you can decline) so you can open WCC at **http://wcc.test:8473** instead of the
+loopback IP. The port and alias are configurable: set `WCC_PORT` (default `8473`) and/or
+`WCC_HOST` (default `wcc.test`) — both `npm run setup` and `npm run review` read them.
+`npm run install-skill` alone (no deps, no alias) still works if you only want the skills global.
 
 Open the printed URL. The app hosts **multiple reviews at once** — pick one from
 the header switcher dropdown (shown when more than one exists); the 3s poll is
@@ -271,7 +277,7 @@ lowercase slug):
 # Review uncommitted work in some repo:
 node bin/import.mjs --repo /path/to/repo --base main --head WORKTREE \
   --id my-change --title "My change"
-npm run review        # open http://127.0.0.1:5174 and pick "my-change"
+npm run review        # open http://127.0.0.1:8473 (or http://wcc.test:8473) and pick "my-change"
 ```
 
 To seed curated findings as annotations, write a seed JSON (shape in
