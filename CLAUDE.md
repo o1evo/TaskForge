@@ -6,18 +6,18 @@ If a user asks to **"use WCC" / "set up the Work Command Center" / "start tracki
 the app isn't set up yet, run these from this repo's root:
 
 ```bash
-npm run setup          # one step: installs deps + makes the skills global (= npm install && install-skill)
-npm run review         # then start the app → http://127.0.0.1:5174
+npm run setup          # installs deps, makes the skills global, and offers an /etc/hosts alias
+npm run review         # then start the app → http://127.0.0.1:8473  (or http://wcc.test:8473)
 ```
 
-`npm run setup` is the same as running these two yourself:
+`npm run setup` does three things: `npm install` (deps), `node bin/install-skill.mjs` (symlink
+the two skills into `~/.claude/skills/` so they work from ANY repo), and an **interactive prompt**
+asking whether to add `127.0.0.1 wcc.test` to `/etc/hosts` (sudo; decline-able). The listen port
+and alias are configurable via `WCC_PORT` (default `8473`) and `WCC_HOST` (default `wcc.test`) —
+both `setup` and `review` honor them. If you only want the skills global, `npm run install-skill`
+alone still works.
 
-```bash
-npm install            # app dependencies (react, vite, prismjs, marked, @babel/standalone)
-npm run install-skill  # symlink the two skills into ~/.claude/skills/ so they work from ANY repo
-```
-
-- `npm install` is required to run the app (`npm run review` → http://127.0.0.1:5174).
+- `npm install` is required to run the app (`npm run review` → http://127.0.0.1:8473).
 - `npm run install-skill` makes `work-log-v2` and `code-review-tool` **global**. This is
   **required for the normal cross-project workflow** (importing diffs from / logging work for
   *other* repos): the skills ship as *project-level* skills, so without this step Claude only

@@ -80,7 +80,7 @@ node bin/import.mjs --repo <repo-path> --base main --head WORKTREE \
 Then author the Log page → `reviews/<id>/Page.jsx`. Run the app and open it:
 
 ```bash
-npm run review        # http://127.0.0.1:5174 (or next free port)
+npm run review        # http://127.0.0.1:8473 (or http://wcc.test:8473; set WCC_PORT to change)
 ```
 
 The page renders **live**: edit `Page.jsx`, the app re-renders on its 3s poll — no restart.
