@@ -9,11 +9,14 @@ import { highlight, langForTag } from '../highlight.js';
 //
 // Content is author/Claude-written and this tool is localhost single-user, so we
 // render marked's HTML directly (no sanitizer); don't point this at untrusted md.
-marked.setOptions({ gfm: true, breaks: false });
-
-export default function Markdown({ text }) {
+//
+// `breaks` controls whether a single newline becomes a <br>. Long-form docs (QA
+// plan) want false (paragraph wrapping); chat comments want true (GitHub-style,
+// so a line break in the textarea shows up). Options are passed per-parse so the
+// two callers don't fight over a global setting.
+export default function Markdown({ text, breaks = false }) {
   const ref = useRef(null);
-  const html = marked.parse(text || '');
+  const html = marked.parse(text || '', { gfm: true, breaks });
 
   useEffect(() => {
     const root = ref.current;

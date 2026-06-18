@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState } from './api.js';
+import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor } from './api.js';
 import HunkView from './components/HunkView.jsx';
 import ReviewSidebar from './components/ReviewSidebar.jsx';
 import Thread from './components/Thread.jsx';
@@ -115,6 +115,11 @@ export default function App() {
     await refresh();
   }
 
+  async function removeAnchor(key) {
+    await deleteAnchor(currentId, key);
+    await refresh();
+  }
+
   if (error && !data) return <div className="app"><Banner error={error} /></div>;
   if (!currentId) return <div className="app"><Empty /></div>;
   if (!data) return <div className="app"><div className="loading">Loading…</div></div>;
@@ -184,6 +189,7 @@ export default function App() {
               onDelete: removeMessage,
               onAnchor: createAnchor,
               onAnchorState: changeAnchorState,
+              onAnchorDelete: removeAnchor,
               onNavigate: goToView,
             })}
           />

@@ -69,6 +69,7 @@ export default function PageRuntime({ source, wcc }) {
           version={wcc.data._mtime}
           onCreate={wcc.createAnchor}
           onSetState={wcc.setAnchorState}
+          onDeleteAnchor={wcc.deleteAnchor}
           onSend={wcc.send}
           onDelete={wcc.deleteMessage}
         />
@@ -79,7 +80,7 @@ export default function PageRuntime({ source, wcc }) {
 
 // Builds the page API handed to every Page as the `wcc` prop. Rebuilt each
 // render from the latest polled data, so <wcc.Thread> always shows live messages.
-export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, onNavigate }) {
+export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, onAnchorDelete, onNavigate }) {
   const threads = data.threads || {};
   const hunks = data.hunks || [];
 
@@ -170,6 +171,7 @@ export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, 
     deleteMessage: (target, messageId) => onDelete(target, messageId),
     createAnchor: (anchor) => onAnchor(anchor), // used by the comment layer
     setAnchorState: (key, state) => onAnchorState(key, state),
+    deleteAnchor: (key) => onAnchorDelete && onAnchorDelete(key),
   };
 }
 
