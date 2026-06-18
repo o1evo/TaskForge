@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import MessageText from './MessageText.jsx';
+import Markdown from './Markdown.jsx';
 
 // A chat thread (per-hunk or general). Renders messages and an input that posts
 // a role:"author" message. Reviewer replies arrive via polling. When `onDelete`
@@ -58,7 +58,7 @@ export default function Thread({ messages, onSend, onDelete, compact }) {
               </button>
             )}
           </div>
-          <MessageText text={m.text} />
+          <Markdown text={m.text} breaks />
         </div>
       ))}
       <form className="thread-form" onSubmit={send}>

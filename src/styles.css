@@ -159,7 +159,6 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 .msg-ts { margin-left: auto; opacity: .7; }
 .msg-delete { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; opacity: .55; transition: opacity .12s, color .12s; }
 .msg-delete:hover { opacity: 1; color: var(--blocker, #e5534b); }
-.msg-text { white-space: pre-wrap; }
 
 .thread-form { display: flex; gap: 8px; align-items: flex-end; }
 .thread-form textarea {
@@ -183,47 +182,21 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 .app-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 .app-footer code { color: var(--link); }
 
-/* --- Message bodies: fenced code blocks + inline code (reuse diff palette) --- */
-.msg-text { white-space: pre-wrap; word-break: break-word; }
-.msg-code {
-  position: relative;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin: 8px 0;
-  overflow-x: auto;
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-.msg-code code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  white-space: pre;
-  color: #c9d1d9;
-}
-.msg-code-lang {
-  position: absolute; top: 4px; right: 8px;
-  font-size: 10px; color: var(--muted); text-transform: lowercase;
-}
-.msg-inline-code {
-  font-family: ui-monospace, monospace; font-size: 12px;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 4px; padding: 0 4px; color: var(--link);
-}
-.msg-code .token.comment, .msg-code .token.prolog,
-.msg-code .token.doctype, .msg-code .token.cdata { color: #8b949e; font-style: italic; }
-.msg-code .token.punctuation { color: #c9d1d9; }
-.msg-code .token.keyword, .msg-code .token.boolean,
-.msg-code .token.important, .msg-code .token.atrule { color: #ff7b72; }
-.msg-code .token.string, .msg-code .token.char,
-.msg-code .token.attr-value, .msg-code .token.regex { color: #a5d6ff; }
-.msg-code .token.number, .msg-code .token.symbol, .msg-code .token.constant { color: #79c0ff; }
-.msg-code .token.function, .msg-code .token.method, .msg-code .token.builtin { color: #d2a8ff; }
-.msg-code .token.class-name, .msg-code .token.title { color: #ffa657; }
-.msg-code .token.operator, .msg-code .token.entity, .msg-code .token.url { color: #ff7b72; }
-.msg-code .token.variable, .msg-code .token.attr-name,
-.msg-code .token.property, .msg-code .token.tag, .msg-code .token.key { color: #7ee787; }
-.msg-code .token.namespace { opacity: .8; }
+/* --- Syntax colors for fenced code in rendered Markdown (messages + QA plan) --- */
+.md-body .token.comment, .md-body .token.prolog,
+.md-body .token.doctype, .md-body .token.cdata { color: #8b949e; font-style: italic; }
+.md-body .token.punctuation { color: #c9d1d9; }
+.md-body .token.keyword, .md-body .token.boolean,
+.md-body .token.important, .md-body .token.atrule { color: #ff7b72; }
+.md-body .token.string, .md-body .token.char,
+.md-body .token.attr-value, .md-body .token.regex { color: #a5d6ff; }
+.md-body .token.number, .md-body .token.symbol, .md-body .token.constant { color: #79c0ff; }
+.md-body .token.function, .md-body .token.method, .md-body .token.builtin { color: #d2a8ff; }
+.md-body .token.class-name, .md-body .token.title { color: #ffa657; }
+.md-body .token.operator, .md-body .token.entity, .md-body .token.url { color: #ff7b72; }
+.md-body .token.variable, .md-body .token.attr-name,
+.md-body .token.property, .md-body .token.tag, .md-body .token.key { color: #7ee787; }
+.md-body .token.namespace { opacity: .8; }
 
 /* --- Per-finding threads --- */
 .annotation-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -394,6 +367,15 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 .md-body table { border-collapse: collapse; margin: .8em 0; width: 100%; }
 .md-body th, .md-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .md-body th { background: var(--panel-2); }
+
+/* Markdown inside a chat message: the doc-scale headings/margins are too heavy
+   for a comment bubble, so trim leading/trailing gaps and shrink headings. */
+.msg .md-body { font-size: 13px; word-break: break-word; }
+.msg .md-body > :first-child { margin-top: 0; }
+.msg .md-body > :last-child { margin-bottom: 0; }
+.msg .md-body h1 { font-size: 16px; border-bottom: none; padding-bottom: 0; }
+.msg .md-body h2 { font-size: 15px; border-bottom: none; padding-bottom: 0; }
+.msg .md-body h3, .msg .md-body h4 { font-size: 13px; }
 
 /* --- Click a finding → toggle a sticky highlight on the lines it concerns --- */
 .annotation-jump { cursor: pointer; }
