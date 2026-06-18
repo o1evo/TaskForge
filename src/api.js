@@ -63,6 +63,26 @@ export async function setAnchorState(id, key, state) {
   return r.json();
 }
 
+export async function deleteAnchor(id, key) {
+  const r = await fetch(`/api/review/${encodeURIComponent(id)}/anchor-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to delete comment');
+  return r.json();
+}
+
+export async function runReview(id, { resume = true } = {}) {
+  const r = await fetch(`/api/review/${encodeURIComponent(id)}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resume }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to start runner');
+  return r.json();
+}
+
 export async function postAnnotations(id, target, annotations) {
   const r = await fetch(`/api/review/${encodeURIComponent(id)}/annotations`, {
     method: 'POST',

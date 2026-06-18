@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState } from './api.js';
+import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor, runReview } from './api.js';
 import HunkView from './components/HunkView.jsx';
 import ReviewSidebar from './components/ReviewSidebar.jsx';
 import Thread from './components/Thread.jsx';
@@ -17,6 +17,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [view, setView] = useState(null); // null → default per task (Log if it has a page)
   const [pendingJump, setPendingJump] = useState(null); // DOM id to scroll to after a tab switch
+  const [running, setRunning] = useState(false); // Relay runner kick-off in flight
+  const [runMsg, setRunMsg] = useState(null); // last runner kick-off result/toast
   const mtimeRef = useRef(null);
 
   // Cross-tab navigation handed to the Log page via wcc.onNavigate: switch tabs
@@ -115,6 +117,29 @@ export default function App() {
     await refresh();
   }
 
+  async function removeAnchor(key) {
+    await deleteAnchor(currentId, key);
+    await refresh();
+  }
+
+  // Kick off the Relay story runner for this review (a fresh `claude --print`
+  // pass). Used as the "Resume" action after answering a checkpoint: the human
+  // replies in a thread, then clicks this to wake a new run that reconstructs
+  // from the branch + thread + task. Detached server-side; watch reviews/<id>
+  // and the runner log for progress.
+  async function startRunner() {
+    setRunning(true);
+    setRunMsg(null);
+    try {
+      const res = await runReview(currentId);
+      setRunMsg(`runner started (pid ${res.pid})`);
+    } catch (e) {
+      setRunMsg(`failed: ${e.message}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
   if (error && !data) return <div className="app"><Banner error={error} /></div>;
   if (!currentId) return <div className="app"><Empty /></div>;
   if (!data) return <div className="app"><div className="loading">Loading…</div></div>;
@@ -146,6 +171,26 @@ export default function App() {
           )}
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
+          {review.repo && (
+            <button
+              onClick={startRunner}
+              disabled={running}
+              title="Run the Relay story runner: a fresh claude --print pass that reconstructs from the branch + this thread + the task and continues. Answer the checkpoint first, then Resume."
+              style={{
+                background: running ? '#21262d' : '#238636',
+                color: '#fff', border: '1px solid #2ea043', borderRadius: 6,
+                padding: '4px 10px', cursor: running ? 'default' : 'pointer',
+                fontSize: 12, fontWeight: 600,
+              }}
+            >
+              {running ? 'Starting…' : '▶ Resume runner'}
+            </button>
+          )}
+          {runMsg && (
+            <span style={{ fontSize: 12, color: runMsg.startsWith('failed') ? '#f85149' : '#8b949e' }}>
+              {runMsg}
+            </span>
+          )}
         </div>
       </header>
 
@@ -184,6 +229,7 @@ export default function App() {
               onDelete: removeMessage,
               onAnchor: createAnchor,
               onAnchorState: changeAnchorState,
+              onAnchorDelete: removeAnchor,
               onNavigate: goToView,
             })}
           />

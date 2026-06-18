@@ -10,8 +10,11 @@ import {
   existsSync,
   statSync,
   readdirSync,
+  mkdirSync,
+  openSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
 import { ensureAnnotationIds, annotationIds } from './annotations.mjs';
 import { liveDiff } from './livediff.mjs';
 
@@ -268,13 +271,21 @@ export function createApi(reviewsDir) {
         if (!quote) return json(res, 400, { error: 'quote is required' });
         data.anchors = data.anchors || {};
         const existing = data.anchors[key] || {};
-        data.anchors[key] = {
+        const anchor = {
           quote,
           prefix: String(body.prefix || '').slice(0, 200),
           suffix: String(body.suffix || '').slice(0, 200),
           state: existing.state || 'open',
           createdAt: existing.createdAt || new Date().toISOString(),
         };
+        // Exact-offset anchoring: persist the selection's character span so the
+        // highlight reattaches deterministically. Preserve prior offsets on update
+        // when the caller doesn't resend them.
+        const startVal = body.start != null ? body.start : existing.start;
+        const endVal = body.end != null ? body.end : existing.end;
+        if (startVal != null && Number.isFinite(+startVal)) anchor.start = Math.trunc(+startVal);
+        if (endVal != null && Number.isFinite(+endVal)) anchor.end = Math.trunc(+endVal);
+        data.anchors[key] = anchor;
         save(id, data);
         return json(res, 200, { key, anchor: data.anchors[key] });
       }
@@ -299,6 +310,26 @@ export function createApi(reviewsDir) {
         return json(res, 200, { key, state });
       }
 
+      // POST /api/review/:id/anchor-delete  { key }
+      // Remove a free-selection comment entirely — drop the anchor AND its thread.
+      // (anchor-state 'hidden' only stops it rendering but keeps the data; this is
+      // the real "delete this highlight comment".)
+      m = path.match(/^\/api\/review\/([^/]+)\/anchor-delete$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const body = await readBody(req);
+        const key = String(body.key || '');
+        const hadAnchor = !!(data.anchors && data.anchors[key]);
+        const hadThread = !!(data.threads && data.threads[key]);
+        if (!hadAnchor && !hadThread) return json(res, 404, { error: `unknown anchor: ${key}` });
+        if (data.anchors) delete data.anchors[key];
+        if (data.threads) delete data.threads[key];
+        save(id, data);
+        return json(res, 200, { deleted: key });
+      }
+
       // POST /api/review/:id/annotations  { target: hunkId, annotations: [...] }
       m = path.match(/^\/api\/review\/([^/]+)\/annotations$/);
       if (m && req.method === 'POST') {
@@ -315,6 +346,43 @@ export function createApi(reviewsDir) {
         ensureAnnotationIds(data); // give new annotations stable thread ids
         save(id, data);
         return json(res, 200, hunk.annotations);
+      }
+
+      // POST /api/review/:id/run  { resume?: boolean }
+      // Kick off the Relay story runner for this review, detached. The review's
+      // stored repo is the working checkout the runner operates in. The runner
+      // (bin/relay-run.mjs) runs ONE `claude --print` pass and exits; the human
+      // clicks this again (via "Resume runner") after answering a checkpoint.
+      //
+      // !!! SECURITY — PRE-TUNNEL GATE !!!
+      // This endpoint executes a local process. That is acceptable ONLY while WCC
+      // binds to 127.0.0.1 (the single-box PoC). Before WCC is EVER exposed via a
+      // tunnel (cloudflared) or a network interface, this MUST be put behind auth —
+      // otherwise it is unauthenticated remote code execution on the host.
+      m = path.match(/^\/api\/review\/([^/]+)\/run$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const repo = data.review && data.review.repo;
+        if (!repo) {
+          return json(res, 400, { error: 'review has no repo — not a runnable story' });
+        }
+        const body = await readBody(req);
+        const resume = body.resume !== false; // default true — the button resumes
+        const launcher = join(reviewsDir, '..', 'bin', 'relay-run.mjs');
+        const logDir = join(reviewsDir, '..', '.wcc');
+        try { mkdirSync(logDir, { recursive: true }); } catch { /* best effort */ }
+        const logFd = openSync(join(logDir, `relay-${id}.log`), 'a');
+        const runArgs = [launcher, '--repo', repo, '--story', id];
+        if (resume) runArgs.push('--resume');
+        const child = spawn(process.execPath, runArgs, {
+          cwd: repo,
+          detached: true,
+          stdio: ['ignore', logFd, logFd],
+        });
+        child.unref();
+        return json(res, 200, { started: true, pid: child.pid, resume, repo });
       }
 
       return json(res, 404, { error: 'no such api route' });

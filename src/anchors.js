@@ -92,6 +92,8 @@ export function captureSelection(container) {
     quote,
     prefix: text.slice(Math.max(0, start - CTX), start),
     suffix: text.slice(end, end + CTX),
+    start,
+    end,
     rect: { top: br.top - cr.top, left: br.left - cr.left, width: br.width, height: br.height },
   };
 }
@@ -102,6 +104,18 @@ export function locate(container, anchor) {
   const text = fullText(container);
   const q = anchor.quote;
   if (!q) return null;
+  // Exact reattach: if the selection's character offsets were stored and the text
+  // at that span is still the quoted text, use them verbatim — deterministic,
+  // survives reloads, and pins exactly what was selected (no fuzzy match needed).
+  if (
+    Number.isInteger(anchor.start) &&
+    Number.isInteger(anchor.end) &&
+    anchor.end > anchor.start &&
+    text.slice(anchor.start, anchor.end) === q
+  ) {
+    return { start: anchor.start, end: anchor.end };
+  }
+  // Fallback (legacy anchors, or the page text moved): fuzzy quote+context search.
   const hits = [];
   let i = text.indexOf(q);
   while (i !== -1) {

@@ -8,7 +8,7 @@ import { captureSelection, locate, rectsOf, freshKey } from '../anchors.js';
 //   2. a floating "Comment" button when there's a text selection,
 //   3. a popover (the chat thread) for the focused anchor.
 // All app chrome — independent of what the page author wrote.
-export default function CommentLayer({ pageRef, anchors, threads, version, onCreate, onSetState, onSend, onDelete }) {
+export default function CommentLayer({ pageRef, anchors, threads, version, onCreate, onSetState, onDeleteAnchor, onSend, onDelete }) {
   const [positions, setPositions] = useState({}); // key -> rects[]
   const [orphans, setOrphans] = useState([]); // keys whose quote no longer resolves
   const [pending, setPending] = useState(null); // { quote, prefix, suffix, rect }
@@ -34,10 +34,21 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
       setOrphans(orph);
     }
     recompute();
+    // On a fresh load the first synchronous pass can run before text is laid out
+    // (and before web fonts apply), which drops highlights until the next poll.
+    // Re-run after a frame, after fonts settle, and after a short delay for reflow.
+    const raf = requestAnimationFrame(recompute);
+    const settle = setTimeout(recompute, 300);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(recompute).catch(() => {});
     const ro = new ResizeObserver(recompute);
     if (pageRef.current) ro.observe(pageRef.current);
     window.addEventListener('resize', recompute);
-    return () => { ro.disconnect(); window.removeEventListener('resize', recompute); };
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(settle);
+      ro.disconnect();
+      window.removeEventListener('resize', recompute);
+    };
   }, [pageRef, anchors, version]);
 
   // Detect a text selection inside the page (ignore clicks within our own UI).
@@ -72,7 +83,7 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
     setPending(null);
-    await onCreate({ key, quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix });
+    await onCreate({ key, quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix, start: pending.start, end: pending.end });
     setOpenKey(key); // open the composer; highlight appears on the next recompute
   }
 
@@ -85,6 +96,7 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
       {/* highlight overlays */}
       {Object.entries(positions).map(([key, rects]) => {
         const a = anchors[key];
+        if (!a) return null; // anchor just deleted; positions/orphans lag anchors by a render
         const cls = `wcc-hl ${a.state === 'resolved' ? 'resolved' : ''} ${openKey === key ? 'active' : ''}`;
         return rects.map((r, i) => (
           <div
@@ -125,6 +137,9 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
                 <button onClick={() => onSetState(openKey, 'resolved')}>Resolve</button>
               )}
               <button onClick={() => { onSetState(openKey, 'hidden'); setOpenKey(null); }}>Hide</button>
+              {onDeleteAnchor && (
+                <button onClick={() => { if (window.confirm('Delete this comment and its thread? This cannot be undone.')) { onDeleteAnchor(openKey); setOpenKey(null); } }}>Delete</button>
+              )}
               <button onClick={() => setOpenKey(null)} aria-label="close">✕</button>
             </div>
           </div>
@@ -145,12 +160,17 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
           </button>
           {showOrphans && (
             <div className="wcc-orphans-list">
-              {orphans.map((key) => (
-                <div key={key} className="wcc-orphan">
-                  <span className="wcc-quote">“{truncate(anchors[key].quote, 60)}”</span>
-                  <button onClick={() => onSetState(key, 'hidden')}>Dismiss</button>
-                </div>
-              ))}
+              {orphans.map((key) => {
+                const a = anchors[key];
+                if (!a) return null; // deleted anchor still in the lagging orphans list
+                return (
+                  <div key={key} className="wcc-orphan">
+                    <span className="wcc-quote">“{truncate(a.quote, 60)}”</span>
+                    <button onClick={() => onSetState(key, 'hidden')}>Dismiss</button>
+                    {onDeleteAnchor && <button onClick={() => onDeleteAnchor(key)}>Delete</button>}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
