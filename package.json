@@ -7,6 +7,8 @@
   "scripts": {
     "setup": "npm install && node bin/setup.mjs",
     "review": "vite",
+    "build": "vite build",
+    "serve": "node server/serve.mjs",
     "import": "node bin/import.mjs",
     "install-skill": "node bin/install-skill.mjs"
   },
