@@ -40,6 +40,18 @@ npm run review    # serves on http://127.0.0.1:7777
 Open the printed URL — a **sample task** is already loaded, so you can click through all
 three tabs immediately. Delete `reviews/sample/` once you've imported your own.
 
+## Uninstall
+
+Ask Claude to *"uninstall WCC"*, or run:
+
+```bash
+npm run uninstall-skill     # removes the global skill symlinks (safe; --force also removes copies)
+```
+
+Then, if you used them: `claude mcp remove wcc` (the optional server MCP), drop the
+`127.0.0.1 wcc` line from `/etc/hosts`, and delete this folder (that also clears the
+`.wcc/` runtime state). Your `reviews/` data is just files — nothing is left behind elsewhere.
+
 `npm run setup` also asks whether to add a `127.0.0.1 wcc` line to `/etc/hosts`
 (sudo, you can decline) so you can open WCC at **http://wcc:7777** instead of the
 loopback IP. The port and alias are configurable: set `WCC_PORT` (default `7777`) and/or

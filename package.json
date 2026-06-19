@@ -10,7 +10,8 @@
     "build": "vite build",
     "serve": "node server/serve.mjs",
     "import": "node bin/import.mjs",
-    "install-skill": "node bin/install-skill.mjs"
+    "install-skill": "node bin/install-skill.mjs",
+    "uninstall-skill": "node bin/uninstall.mjs"
   },
   "license": "MIT",
   "dependencies": {
