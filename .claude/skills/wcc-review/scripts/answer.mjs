@@ -26,7 +26,7 @@ if (!args.msg) die('Pass --msg <author-msg-id|next>.');
 const text = args.file ? readFileSync(args.file, 'utf8').replace(/\n$/, '') : args.text;
 if (!text) die('Pass --file <path> or --text "...".');
 
-const path = join(root, 'reviews', args.id, 'thread.json');
+const path = join(root, 'work', args.id, 'thread.json');
 
 // --- re-read immediately before mutating (shrinks the lost-update window) ---
 const t = JSON.parse(readFileSync(path, 'utf8'));

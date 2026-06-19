@@ -12,7 +12,7 @@
 //     the working tree), pass --head WORKTREE to diff the working tree against
 //     base instead: `git diff <base>`.
 //   - --seed merges curated annotations/threads into matching hunks. See
-//     reviews/seeds/*.json for the shape.
+//     work/seeds/*.json for the shape.
 //   - --refresh RE-RUNS the diff for an existing review and writes the new hunks,
 //     while PRESERVING the live state: annotations (re-attached by hunk id, so
 //     resolved/deleted findings and their states carry over), all chat threads,
@@ -20,7 +20,7 @@
 //     review, so `--id <id> --refresh` is enough. Use this after each round so the
 //     Code Review tab shows current code without losing the discussion. (--force
 //     still does a destructive overwrite from the seed.)
-//   - Output goes to reviews/<id>/thread.json (gitignored).
+//   - Output goes to work/<id>/thread.json (gitignored).
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
@@ -145,7 +145,7 @@ function main() {
   let prev = null;
   if (args.refresh) {
     if (!id) die('--refresh needs --id <id>.');
-    const prevPath = join(ROOT, 'reviews', id, 'thread.json');
+    const prevPath = join(ROOT, 'work', id, 'thread.json');
     if (!existsSync(prevPath)) die(`--refresh: ${prevPath} does not exist — do a normal import first.`);
     prev = JSON.parse(readFileSync(prevPath, 'utf8'));
     args.repo = args.repo || prev.review?.repo;
@@ -200,7 +200,7 @@ function main() {
   ensureAnnotationIds(review); // per-finding thread ids
   delete review._seq;
 
-  const dir = join(ROOT, 'reviews', id);
+  const dir = join(ROOT, 'work', id);
   mkdirSync(dir, { recursive: true });
   const out = join(dir, 'thread.json');
   if (existsSync(out) && !args.force && !args.refresh) {

@@ -1,13 +1,13 @@
 ---
-name: code-review-tool
-description: Drive the local file-bridge code-review app (the "Work Command Center" / CodeReviews app) — a private Vite+React viewer that renders an annotated diff plus per-hunk chat threads, persisted to reviews/<id>/thread.json. Use when the user asks to answer review questions / reply in the review app, import or refresh a diff for review, seed findings as annotations, start/open the review app, or mentions "the review app", "CodeReviews", "Work Command Center", "WCC", "thread.json", "review widget", or asks you to participate as the reviewer. The app and a Claude session communicate ONLY through thread.json (no MCP, no network); the app polls it every 3s.
+name: wcc-review
+description: Drive the local file-bridge code-review app (the "Work Command Center" / CodeReviews app) — a private Vite+React viewer that renders an annotated diff plus per-hunk chat threads, persisted to work/<id>/thread.json. Use when the user asks to answer review questions / reply in the review app, import or refresh a diff for review, seed findings as annotations, start/open the review app, or mentions "the review app", "CodeReviews", "Work Command Center", "WCC", "thread.json", "review widget", or asks you to participate as the reviewer. The app and a Claude session communicate ONLY through thread.json (no MCP, no network); the app polls it every 3s.
 ---
 
 # Code Review Tool
 
 A local, private code-review app (the CodeReviews / Work Command Center repo). It renders a
 git diff as annotated hunks plus chat threads, and persists everything to
-`reviews/<id>/thread.json`. There is **no MCP and no server→agent push**: the app and a
+`work/<id>/thread.json`. There is **no MCP and no server→agent push**: the app and a
 Claude session talk *only* by reading/writing that JSON file. The app polls it every ~3s,
 so any write you make appears within ~3s. All local; never sends source anywhere.
 
@@ -17,7 +17,7 @@ so any write you make appears within ~3s. All local; never sends source anywhere
 > pass `--root <dir>` only to target a different checkout.
 
 The app hosts **multiple reviews at once** — pick one in the header switcher dropdown; the
-3s poll is scoped to the selected id. Each review is an independent `reviews/<id>/thread.json`
+3s poll is scoped to the selected id. Each review is an independent `work/<id>/thread.json`
 (and may target a different repo/clone), so reviews share nothing. Convention: `<id>` is a
 short lowercase slug (e.g. a ticket id like `cu-1234`, or any stable name).
 
@@ -43,7 +43,7 @@ Two rules:
 ## Answer the user's review questions (the main job)
 
 ```bash
-S=.claude/skills/code-review-tool/scripts   # run from the CodeReviews repo root
+S=.claude/skills/wcc-review/scripts   # run from the CodeReviews repo root
 # 1. see what's unanswered
 node $S/list_pending.mjs --id <review-id>
 # 2. write your reply to a file (so code fences/quotes survive the shell), then:
@@ -84,7 +84,7 @@ review id shown in the UI. If it's already running, just open the URL.
 First import:
 ```bash
 node bin/import.mjs --repo <repo-path> --base <ref> --head <ref> \
-  --id <review-id> --title "..." [--seed reviews/seeds/<id>.json]
+  --id <review-id> --title "..." [--seed work/seeds/<id>.json]
 ```
 - Use `--head WORKTREE` when the change is uncommitted (diffs the working tree vs base).
   This is common — branch work is often staged/unstaged, not yet on HEAD.

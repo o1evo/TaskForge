@@ -10,7 +10,7 @@ import { createApi } from './api.mjs';
 
 const ROOT    = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST    = process.env.WCC_DIST_DIR    || join(ROOT, 'dist');
-const REVIEWS = process.env.WCC_REVIEWS_DIR || join(ROOT, 'reviews');
+const WORK_DIR = process.env.WCC_WORK_DIR || join(ROOT, 'work');
 const PORT    = Number(process.env.WCC_PORT) || 7777;
 const HOST    = process.env.WCC_BIND || '127.0.0.1';  // container sets 0.0.0.0
 
@@ -32,7 +32,7 @@ const MIME = {
   '.ttf':  'font/ttf',
 };
 
-const handleApi = createApi(REVIEWS);
+const handleApi = createApi(WORK_DIR);
 
 async function serveStatic(req, res) {
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -69,5 +69,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[wcc] serving ${DIST} + file-bridge on http://${HOST}:${PORT}  (reviews: ${REVIEWS})`);
+  console.log(`[wcc] serving ${DIST} + file-bridge on http://${HOST}:${PORT}  (work: ${WORK_DIR})`);
 });

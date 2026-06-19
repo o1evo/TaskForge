@@ -5,8 +5,8 @@ CodeReviews app itself (`bin/import.mjs`, `server/diff.mjs` in the repo root).
 
 ## thread.json
 
-Output of an import; lives at `reviews/<id>/thread.json` (gitignored — never committed).
-The app lists every `reviews/<id>/` in a header switcher; each review is fully independent
+Output of an import; lives at `work/<id>/thread.json` (gitignored — never committed).
+The app lists every `work/<id>/` in a header switcher; each review is fully independent
 and may target a different repo/clone (see `review.repo`). One reviewer session per id.
 
 ```json
@@ -48,7 +48,7 @@ node bin/import.mjs --id <id> --refresh        # re-diff in place, keep the conv
 
 - `--head WORKTREE` → `git diff <base>` (working tree vs base) for uncommitted work.
   Otherwise `git diff <base> <head>`.
-- Writes `reviews/<id>/thread.json` (atomic). Refuses to overwrite an existing review unless
+- Writes `work/<id>/thread.json` (atomic). Refuses to overwrite an existing review unless
   `--refresh` or `--force`.
 - **`--refresh`** re-runs the diff for an existing review and writes new hunks while
   **preserving** annotations (re-attached by hunk id → resolved/deleted states carry over),
@@ -57,7 +57,7 @@ node bin/import.mjs --id <id> --refresh        # re-diff in place, keep the conv
   structure is unchanged.
 - **`--force`** regenerates from the diff + seed → **wipes any live conversation.** Fresh start only.
 
-## Seed file (`reviews/seeds/<id>.json`)
+## Seed file (`work/seeds/<id>.json`)
 
 Curated findings + optional starter threads, merged into matching hunks at import.
 

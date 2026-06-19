@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 import { createApi } from './server/api.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const reviewsDir = resolve(ROOT, 'reviews');
+const workDir = resolve(ROOT, 'work');
 
 // Uncommon default port (avoids the usual 3000 / 5173 / 8080 collisions) so the
 // address stays free and predictable. Override with WCC_PORT. The optional
@@ -17,7 +17,7 @@ const PORT = Number(process.env.WCC_PORT) || 7777;
 // Mount the file-bridge API as dev-server middleware so the whole tool is one
 // process (`npm run review`). Localhost only; no proxy, no external calls.
 function apiPlugin() {
-  const handle = createApi(reviewsDir);
+  const handle = createApi(workDir);
   return {
     name: 'wcc-api',
     configureServer(server) {

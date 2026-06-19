@@ -1,6 +1,6 @@
 ---
-name: work-log-v2
-description: Track multi-step work as an interactive page in the Work Command Center app, not just markdown. Use when starting a new story/feature/investigation, when given a task id or URL, or when the user says "new story", "new task", "start tracking", "log this", "work command center", "WCC", "use WCC", "build a log page", or "work log page". The log lives as reviews/<id>/Page.jsx — bespoke interactive React with anchored Claude chat threads — paired with the Code Review tab for the same task id.
+name: wcc-worklog
+description: Track multi-step work as an interactive page in the Work Command Center app, not just markdown. Use when starting a new story/feature/investigation, when given a task id or URL, or when the user says "new story", "new task", "start tracking", "log this", "work command center", "WCC", "use WCC", "build a log page", or "work log page". The log lives as work/<id>/Page.jsx — bespoke interactive React with anchored Claude chat threads — paired with the Code Review tab for the same task id.
 ---
 
 # Work Log v2 — Work Command Center
@@ -9,10 +9,10 @@ The work log is a **bespoke interactive React page** that Claude authors per tas
 live in the **Work Command Center** app (this repo, `code-reviews`). Each task has tabs that share
 one id:
 
-- **Log** — the page you author (`reviews/<id>/Page.jsx`): findings, timeline, follow-ups,
+- **Log** — the page you author (`work/<id>/Page.jsx`): findings, timeline, follow-ups,
   status — *interactive*, with chat threads you can anchor to any section.
-- **Code Review** — the annotated diff + per-hunk threads, driven by the `code-review-tool` skill.
-- **QA Plan** — a plain-Markdown test plan (`reviews/<id>/qa-plan.md`) with a Copy button.
+- **Code Review** — the annotated diff + per-hunk threads, driven by the `wcc-review` skill.
+- **QA Plan** — a plain-Markdown test plan (`work/<id>/qa-plan.md`) with a Copy button.
 
 `<id>` is a short lowercase slug — a ticket id (`cu-1234`), an issue number, or any stable
 name. Using the **same id** for every tab is what pairs the work log with its code review and
@@ -62,7 +62,7 @@ one-line fix or typo — those don't need a work log at all.
 
 ## Getting the task into the Work Command Center
 
-A task shows up in the app only once `reviews/<id>/` exists. Create it by importing the diff
+A task shows up in the app only once `work/<id>/` exists. Create it by importing the diff
 (this also populates the Code Review tab), from the CodeReviews repo root:
 
 ```bash
@@ -75,9 +75,9 @@ node bin/import.mjs --repo <repo-path> --base main --head WORKTREE \
   `node bin/import.mjs --id <id> --refresh`** — it rewrites the hunks but preserves the
   conversation, annotations (with their resolved/deleted states), and Log-page comments.
   (`--force` is the destructive overwrite-from-seed; only for a fresh start.)
-- Early/discovery tasks with no code yet still get a `reviews/<id>/` dir; the diff fills in later.
+- Early/discovery tasks with no code yet still get a `work/<id>/` dir; the diff fills in later.
 
-Then author the Log page → `reviews/<id>/Page.jsx`. Run the app and open it:
+Then author the Log page → `work/<id>/Page.jsx`. Run the app and open it:
 
 ```bash
 npm run review        # http://127.0.0.1:7777 (or http://wcc:7777; set WCC_PORT to change)
@@ -107,7 +107,7 @@ page. The essentials:
    `<wcc.Thread target="log:<anchor>" title="…" />` — use this for a discussion you want *always
    visible* at a known section (e.g. a key decision), not an ad-hoc note.
 
-Both are `log:` threads in the same `reviews/<id>/thread.json`; the reviewer Claude session answers
+Both are `log:` threads in the same `work/<id>/thread.json`; the reviewer Claude session answers
 both through the same file-bridge as code-review threads.
 
 ## What to put on the page
@@ -131,7 +131,7 @@ A good Log page lets a reader see what was tried, what worked, what didn't, and 
 ## QA Plan tab
 
 The app has a dedicated **QA Plan** tab (third tab, beside Log and Code Review). Unlike the Log
-page (bespoke React), the QA plan is **plain Markdown** — write `reviews/<id>/qa-plan.md` and the app
+page (bespoke React), the QA plan is **plain Markdown** — write `work/<id>/qa-plan.md` and the app
 renders it and shows a **Copy markdown** button so the plan can be lifted out and pasted into a
 ticket, an email, or handed to QA verbatim. No JSX, no `Page.jsx` — just a markdown file. Build one
 for any task QA will validate (especially infrastructure, cutover, or anything touching outside
@@ -166,15 +166,15 @@ Notes:
 
 ## How the reviewer answers page threads
 
-Page chat threads (`log:<anchor>`) live in the same `reviews/<id>/thread.json` as code-review
-threads, so the **`code-review-tool` skill** answers them with the same scripts
+Page chat threads (`log:<anchor>`) live in the same `work/<id>/thread.json` as code-review
+threads, so the **`wcc-review` skill** answers them with the same scripts
 (`list_pending.mjs` / `answer.mjs`). Tell that session *"You're the reviewer for `<id>`."* — it
 will see and answer page threads alongside hunk/finding threads. Never point two writers at the
 same id at once (see the CodeReviews README's lost-update rule).
 
 ## Current limitations (state these honestly; don't overclaim)
 
-- **Pages live under the gitignored `reviews/` dir** — so `Page.jsx` / `qa-plan.md` are **not
+- **Pages live under the gitignored `work/` dir** — so `Page.jsx` / `qa-plan.md` are **not
   version-controlled** with the app. For a durable record of major decisions, also keep a short
   note wherever your team keeps durable docs; don't double-maintain the full narrative — the page
   is primary.

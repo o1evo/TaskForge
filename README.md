@@ -3,13 +3,13 @@
 **A local-first workspace where a Claude Code session reviews your code and tracks your work** — three tabs per task, all backed by plain local files. No DB, no telemetry, nothing leaves your machine.
 
 A localhost web app for driving a single unit of work — keyed by its task id —
-across **three tabs that share one `reviews/<id>/` directory**:
+across **three tabs that share one `work/<id>/` directory**:
 
 | tab | what it is | source of truth | authored via |
 |-----|-----------|-----------------|--------------|
-| **Log** | a bespoke, interactive React work-log page (status, findings, timeline, follow-ups) with chat threads anchored to any text | `reviews/<id>/Page.jsx` | `work-log-v2` skill |
-| **Code Review** | an annotated diff with per-hunk / per-line / per-finding chat threads | `reviews/<id>/thread.json` | `code-review-tool` skill |
-| **QA Plan** | a plain-Markdown QA test plan with a **Copy markdown** button (lift it into a ticket/email) | `reviews/<id>/qa-plan.md` | hand-written markdown |
+| **Log** | a bespoke, interactive React work-log page (status, findings, timeline, follow-ups) with chat threads anchored to any text | `work/<id>/Page.jsx` | `wcc-worklog` skill |
+| **Code Review** | an annotated diff with per-hunk / per-line / per-finding chat threads | `work/<id>/thread.json` | `wcc-review` skill |
+| **QA Plan** | a plain-Markdown QA test plan with a **Copy markdown** button (lift it into a ticket/email) | `work/<id>/qa-plan.md` | hand-written markdown |
 
 In every tab a *separate Claude Code session* (the "reviewer") joins the chat by
 reading and writing one plain JSON file (`thread.json`). No data ever leaves this
@@ -38,7 +38,7 @@ npm run review    # serves on http://127.0.0.1:7777
 ```
 
 Open the printed URL — a **sample task** is already loaded, so you can click through all
-three tabs immediately. Delete `reviews/sample/` once you've imported your own.
+three tabs immediately. Delete `work/sample/` once you've imported your own.
 
 ## Uninstall
 
@@ -50,7 +50,7 @@ npm run uninstall-skill     # removes the global skill symlinks (safe; --force a
 
 Then, if you used them: `claude mcp remove wcc` (the optional server MCP), drop the
 `127.0.0.1 wcc` line from `/etc/hosts`, and delete this folder (that also clears the
-`.wcc/` runtime state). Your `reviews/` data is just files — nothing is left behind elsewhere.
+`.wcc/` runtime state). Your `work/` data is just files — nothing is left behind elsewhere.
 
 `npm run setup` also asks whether to add a `127.0.0.1 wcc` line to `/etc/hosts`
 (sudo, you can decline) so you can open WCC at **http://wcc:7777** instead of the
@@ -95,9 +95,9 @@ only a *remote*: it acts while a Claude session exists, so it doesn't replace a
 Two Claude Code skills ship **inside this repo** under
 [.claude/skills/](.claude/skills/):
 
-- **`code-review-tool`** — the reviewer bridge: answer threads, import / refresh /
+- **`wcc-review`** — the reviewer bridge: answer threads, import / refresh /
   seed diffs (see "Participating as the reviewer").
-- **`work-log-v2`** — author the Log page + QA plan for a task.
+- **`wcc-worklog`** — author the Log page + QA plan for a task.
 
 When you run Claude Code **inside this repo**, project-level skills are
 auto-discovered — **nothing to install.** To also drive reviews from *other*
@@ -143,7 +143,7 @@ UI  ──POST /message──▶  thread.json + Page.jsx + qa-plan.md  ◀──
 
 ## Where state lives
 
-One directory per task — **`reviews/<id>/`** — holding up to three files:
+One directory per task — **`work/<id>/`** — holding up to three files:
 
 | file | feeds tab | required? |
 |------|-----------|-----------|
@@ -153,10 +153,10 @@ One directory per task — **`reviews/<id>/`** — holding up to three files:
 
 `thread.json` is the single source of truth for the diff, hunks, annotations, and
 **every chat message across all three tabs** (Log/QA threads use `log:` keys, see
-below). The `reviews/` tree is **gitignored** because it embeds proprietary
+below). The `work/` tree is **gitignored** because it embeds proprietary
 source. There is no database, no in-memory cache, no `localStorage`/cookies.
 Restarting the server or reloading the tab changes nothing — both rebuild from
-these files. (`reviews/seeds/*.json` are curated annotation inputs for `import`.)
+these files. (`work/seeds/*.json` are curated annotation inputs for `import`.)
 
 By convention `<id>` is a short lowercase slug — a ticket id, an issue number, or
 any stable name (e.g. `cu-1234`, `issue-42`, `auth-refactor`). Using the same id
@@ -232,9 +232,9 @@ node bin/import.mjs --repo /path/to/repo --base main --head WORKTREE --title "..
 # From a raw patch file:
 node bin/import.mjs --diff change.diff --title "My change"
 
-# Seed annotations/threads from a curated JSON (see reviews/seeds/):
+# Seed annotations/threads from a curated JSON (see work/seeds/):
 node bin/import.mjs --repo ... --base ... --head ... --title "..." \
-  --id my-id --seed reviews/seeds/my-seed.json
+  --id my-id --seed work/seeds/my-seed.json
 
 # Re-persist the snapshot or change the stored base/head/title:
 node bin/import.mjs --id my-id --refresh
@@ -255,23 +255,23 @@ node bin/import.mjs --id my-id --refresh
 
 ## Authoring the Log & QA tabs
 
-Both are Claude-authored files dropped into `reviews/<id>/`; the app picks them up
+Both are Claude-authored files dropped into `work/<id>/`; the app picks them up
 on the next 3s poll (no restart), and the tab only appears when its file exists.
 
-- **Log page → `reviews/<id>/Page.jsx`** — bespoke interactive React for *this*
+- **Log page → `work/<id>/Page.jsx`** — bespoke interactive React for *this*
   task (status pill, findings, dated timeline, follow-ups). Contract: define
   `function Page({ wcc }) { … }`, **no imports/exports**; `React` + hooks are in
   scope and `wcc` is injected (data + `<wcc.Thread target="log:…">` to pin a
   discussion + `<wcc.Markdown>`). Readers can also select any text on the page to
   drop a 💬 comment (a `log:` anchor) — no code needed. Authored via the
-  **`work-log-v2`** skill.
-- **QA plan → `reviews/<id>/qa-plan.md`** — plain Markdown (no JSX), rendered with
+  **`wcc-worklog`** skill.
+- **QA plan → `work/<id>/qa-plan.md`** — plain Markdown (no JSX), rendered with
   a **Copy markdown** button so QA can lift it into your tracker/email. Group by
   business capability, tier P0→P3, and give each case Do / Pass / Hits. Also
-  covered by the `work-log-v2` skill.
+  covered by the `wcc-worklog` skill.
 
-> **Skills that drive this app:** `work-log-v2` (start a task, author the Log page
-> + QA plan) and `code-review-tool` (the reviewer bridge — answer threads, import/
+> **Skills that drive this app:** `wcc-worklog` (start a task, author the Log page
+> + QA plan) and `wcc-review` (the reviewer bridge — answer threads, import/
 > refresh/seed diffs). Both are local-only and route through the same
 > `thread.json`.
 
@@ -289,15 +289,15 @@ two layers, both local-only and append-oriented:
    valid JSON. Append-only — never edit/delete existing messages or `diff` text;
    never send content off-machine.
 
-2. **The `code-review-tool` skill** (recommended) — ships in-repo at
-   [.claude/skills/code-review-tool/](.claude/skills/code-review-tool/) and
+2. **The `wcc-review` skill** (recommended) — ships in-repo at
+   [.claude/skills/wcc-review/](.claude/skills/wcc-review/) and
    automates the same protocol safely. It auto-triggers when you ask Claude to
    "answer the review questions," "reply in the review app," import/seed a diff,
    etc. It ships helper scripts so you never hand-write into the file (run them
    from the repo root; they resolve the review root automatically):
 
    ```bash
-   S=.claude/skills/code-review-tool/scripts
+   S=.claude/skills/wcc-review/scripts
    node $S/list_pending.mjs --id <review-id>                       # see unanswered author msgs
    node $S/answer.mjs --id <review-id> --msg <author-msg-id|next> --file reply.txt
    ```
@@ -337,8 +337,8 @@ npm run review        # open http://127.0.0.1:7777 (or http://wcc:7777) and pick
 ```
 
 To seed curated findings as annotations, write a seed JSON (shape in
-[.claude/skills/code-review-tool/references/thread-format.md](.claude/skills/code-review-tool/references/thread-format.md))
-and pass `--seed reviews/seeds/<id>.json`. Everything under `reviews/` is
+[.claude/skills/wcc-review/references/thread-format.md](.claude/skills/wcc-review/references/thread-format.md))
+and pass `--seed work/seeds/<id>.json`. Everything under `work/` is
 gitignored, so your diffs and conversations never get committed.
 
 ## License

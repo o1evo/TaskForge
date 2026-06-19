@@ -1,5 +1,5 @@
 // The "tiny backend": a request handler for /api/* that reads and writes
-// reviews/<id>/thread.json. Mounted into the Vite dev server as middleware
+// work/<id>/thread.json. Mounted into the Vite dev server as middleware
 // (see vite.config.mjs) so `npm run review` is a single process. No outbound
 // network calls, ever — it only touches the local filesystem.
 
@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { ensureAnnotationIds, annotationIds } from './annotations.mjs';
 import { liveDiff } from './livediff.mjs';
 
-export function createApi(reviewsDir) {
+export function createApi(workDir) {
   // Per-review change-token cache for the live diff. Maps id -> { hash, mtime }.
   // We re-run `git diff` on every poll (cheap, single-user, local), but only
   // mint a NEW poll token (mtime) when the diff text actually changed — so the
@@ -25,21 +25,21 @@ export function createApi(reviewsDir) {
   function reviewPath(id) {
     // id is a slug; reject anything with path separators to be safe.
     if (!/^[a-z0-9-]+$/i.test(id)) return null;
-    return join(reviewsDir, id, 'thread.json');
+    return join(workDir, id, 'thread.json');
   }
 
   // The Claude-authored interactive work-log page for a task (the "Log" tab).
   // Optional — a task may have a review (thread.json) without a page yet.
   function pagePath(id) {
     if (!/^[a-z0-9-]+$/i.test(id)) return null;
-    return join(reviewsDir, id, 'Page.jsx');
+    return join(workDir, id, 'Page.jsx');
   }
 
   // The QA test plan for a task (the "QA Plan" tab) — plain Markdown so it can be
   // copied out and handed to QA. Optional.
   function qaPath(id) {
     if (!/^[a-z0-9-]+$/i.test(id)) return null;
-    return join(reviewsDir, id, 'qa-plan.md');
+    return join(workDir, id, 'qa-plan.md');
   }
 
   function load(id, { live = false } = {}) {
@@ -128,11 +128,11 @@ export function createApi(reviewsDir) {
   }
 
   function listReviews() {
-    if (!existsSync(reviewsDir)) return [];
-    return readdirSync(reviewsDir, { withFileTypes: true })
+    if (!existsSync(workDir)) return [];
+    return readdirSync(workDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
-      .filter((name) => existsSync(join(reviewsDir, name, 'thread.json')))
+      .filter((name) => existsSync(join(workDir, name, 'thread.json')))
       .map((name) => {
         const data = load(name);
         return {

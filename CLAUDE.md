@@ -18,13 +18,13 @@ both `setup` and `review` honor them. If you only want the skills global, `npm r
 alone still works.
 
 - `npm install` is required to run the app (`npm run review` → http://127.0.0.1:7777).
-- `npm run install-skill` makes `work-log-v2` and `code-review-tool` **global**. This is
+- `npm run install-skill` makes `wcc-worklog` and `wcc-review` **global**. This is
   **required for the normal cross-project workflow** (importing diffs from / logging work for
   *other* repos): the skills ship as *project-level* skills, so without this step Claude only
   discovers them while running inside **this** repo. Flags: `--copy` (copy instead of symlink, if
   the clone may move), `--force` (replace an existing skill of the same name).
 - After install, from any repo the user can say *"new task" / "start tracking" / "use WCC"* and
-  the `work-log-v2` / `code-review-tool` skills take over. Import a change with
+  the `wcc-worklog` / `wcc-review` skills take over. Import a change with
   `node bin/import.mjs --repo <path> --base main --head WORKTREE --id <slug> --title "..."`.
 
 ---
@@ -39,10 +39,10 @@ automatically — the author does not refresh.
 
 ## The one file you touch
 
-`reviews/<review-id>/thread.json`
+`work/<review-id>/thread.json`
 
-If you weren't told the `<review-id>`, list the directories under `reviews/`
-(ignore `reviews/seeds/`) and pick the one the author named, or the only one
+If you weren't told the `<review-id>`, list the directories under `work/`
+(ignore `work/seeds/`) and pick the one the author named, or the only one
 present.
 
 ## Shape of the file (only the parts you edit)
@@ -68,7 +68,7 @@ present.
 
 ## Your job, every turn
 
-1. **Read** `reviews/<review-id>/thread.json`.
+1. **Read** `work/<review-id>/thread.json`.
 2. **Find** every message where `role == "author"` **and** `answered == false`.
    These are the open questions, across `general` and every hunk thread.
 3. For each one, **understand the context**: read that thread's hunk `diff` and
@@ -105,7 +105,7 @@ present.
 
 ## Quick checklist
 
-- [ ] Opened `reviews/<id>/thread.json`
+- [ ] Opened `work/<id>/thread.json`
 - [ ] Listed every `author` + `answered:false` message
 - [ ] Read each one's hunk `diff` + `annotations` (and source if needed)
 - [ ] Appended a `reviewer` reply with a fresh `id` and real `ts`

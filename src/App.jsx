@@ -206,7 +206,7 @@ export default function App() {
       {activeView === 'qa' && <QaView id={currentId} qa={data._qa} />}
 
       <footer className="app-footer">
-        Local file-bridge · <code>reviews/{review.id}/</code> ·
+        Local file-bridge · <code>work/{review.id}/</code> ·
         Log page <code>Page.jsx</code> · review <code>thread.json</code> ·
         protocol in <code>CLAUDE.md</code>
       </footer>
@@ -280,7 +280,7 @@ function QaView({ id, qa }) {
       <div className="empty">
         <h1>No QA plan yet</h1>
         <p>
-          Add a markdown QA plan at <code>reviews/{id}/qa-plan.md</code> — it renders here and can be
+          Add a markdown QA plan at <code>work/{id}/qa-plan.md</code> — it renders here and can be
           copied out and handed to QA. Group tests by capability, tier them P0–P3, and give each a
           Do / Pass / Hits.
         </p>
@@ -290,7 +290,7 @@ function QaView({ id, qa }) {
   return (
     <section className="qa">
       <div className="qa-toolbar">
-        <span className="qa-file">reviews/{id}/qa-plan.md</span>
+        <span className="qa-file">work/{id}/qa-plan.md</span>
         <CopyButton text={qa.source} label="Copy markdown" />
       </div>
       <Markdown text={qa.source} />
@@ -304,7 +304,7 @@ function NoPage({ id }) {
       <h1>No Log page yet</h1>
       <p>
         Ask Claude to build an interactive page for this task — it writes{' '}
-        <code>reviews/{id}/Page.jsx</code> and it renders here live.
+        <code>work/{id}/Page.jsx</code> and it renders here live.
       </p>
     </div>
   );

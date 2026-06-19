@@ -1,4 +1,4 @@
-# Authoring a Work Command Center page (`reviews/<id>/Page.jsx`)
+# Authoring a Work Command Center page (`work/<id>/Page.jsx`)
 
 A page is real React, transformed from JSX in the browser (Babel-standalone) and rendered live.
 Edit the file → it re-renders on the app's 3s poll. No build, no restart.
@@ -6,7 +6,7 @@ Edit the file → it re-renders on the app's 3s poll. No build, no restart.
 ## The contract (keep it exactly)
 
 ```jsx
-// reviews/<id>/Page.jsx
+// work/<id>/Page.jsx
 function Page({ wcc }) {
   const [tab, setTab] = useState('findings');   // hooks are in scope, no import
   return (
@@ -96,7 +96,7 @@ e.g. `style={{ color: 'var(--muted)', border: '1px solid var(--border)' }}`.
 
 ## QA Plan — a markdown file, not JSX
 
-The QA plan is **not** part of `Page.jsx`. It is a plain markdown file `reviews/<id>/qa-plan.md` that
+The QA plan is **not** part of `Page.jsx`. It is a plain markdown file `work/<id>/qa-plan.md` that
 the app renders in its own **QA Plan** tab (third tab, beside Log and Code Review) with a **Copy
 markdown** button. You write markdown; the app handles rendering and copying. Nothing to code.
 
@@ -149,7 +149,7 @@ You can compile-check a page exactly as the runtime does, without a browser (fro
 node --input-type=module -e "
 import * as Babel from '@babel/standalone';
 import { readFileSync } from 'node:fs';
-const src = readFileSync('reviews/<id>/Page.jsx','utf8')
+const src = readFileSync('work/<id>/Page.jsx','utf8')
   .replace(/^\s*import\s.*\$/gm,'').replace(/export\s+default\s+/g,'');
 const { code } = Babel.transform(src, { presets:['react'], filename:'Page.jsx' });
 new Function('React','const {useState,useEffect,useRef,useMemo,useCallback}=React;\n'+code+';return Page;');
@@ -163,4 +163,4 @@ console.log('compiles OK');
 src/components/PageRuntime.jsx   (see buildWcc + HOOK_PREAMBLE)
 ```
 
-Copy an existing page from `reviews/<id>/Page.jsx` as a starting template once you have one.
+Copy an existing page from `work/<id>/Page.jsx` as a starting template once you have one.

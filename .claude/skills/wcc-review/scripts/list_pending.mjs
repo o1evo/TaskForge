@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const args = parse(process.argv.slice(2));
-// Default root = the repo this skill lives in (…/.claude/skills/code-review-tool/scripts → repo).
+// Default root = the repo this skill lives in (…/.claude/skills/wcc-review/scripts → repo).
 // Works whether the skill is used in-repo or via a symlink in ~/.claude/skills (Node resolves it).
 const root = args.root || resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 if (!args.id) die('Pass --id <review-id>.');
 
-const path = join(root, 'reviews', args.id, 'thread.json');
+const path = join(root, 'work', args.id, 'thread.json');
 let t;
 try { t = JSON.parse(readFileSync(path, 'utf8')); }
 catch (e) { die(`Cannot read ${path}: ${e.message}`); }

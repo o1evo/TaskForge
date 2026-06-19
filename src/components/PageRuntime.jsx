@@ -4,7 +4,7 @@ import Thread from './Thread.jsx';
 import Markdown from './Markdown.jsx';
 import CommentLayer from './CommentLayer.jsx';
 
-// Renders a Claude-authored interactive work-log page (`reviews/<id>/Page.jsx`).
+// Renders a Claude-authored interactive work-log page (`work/<id>/Page.jsx`).
 //
 // The page source is transformed from JSX in the browser with Babel-standalone
 // (no build step — a Claude edit to Page.jsx re-renders on the next 3s poll)

@@ -12,11 +12,11 @@ function Page({ wcc }) {
 
       <div style={card}>
         <wcc.Markdown text={`### The three tabs
-- **Log** — *this* page. Claude authors it as \`reviews/<id>/Page.jsx\` and it re-renders live as Claude edits it.
+- **Log** — *this* page. Claude authors it as \`work/<id>/Page.jsx\` and it re-renders live as Claude edits it.
 - **Code Review** — an annotated diff with per-hunk / per-line chat threads.
 - **QA Plan** — a plain-Markdown test plan with a copy button.
 
-Everything is local files under \`reviews/<id>/\` — no DB, no network, nothing leaves your machine.`} />
+Everything is local files under \`work/<id>/\` — no DB, no network, nothing leaves your machine.`} />
       </div>
 
       <h3>What changed in this task</h3>
@@ -33,7 +33,7 @@ Everything is local files under \`reviews/<id>/\` — no DB, no network, nothing
       <wcc.Thread target="log:welcome" title="Ask about WCC" />
 
       <p style={{ color: '#6e7681', fontSize: 13, marginTop: 24 }}>
-        Done exploring? Delete <code>reviews/sample/</code>, then import your own change with{' '}
+        Done exploring? Delete <code>work/sample/</code>, then import your own change with{' '}
         <code>node bin/import.mjs --repo &lt;path&gt; --base main --head HEAD --title "…"</code>.
       </p>
     </div>

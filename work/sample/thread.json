@@ -21,7 +21,7 @@
   ],
   "threads": {
     "general": [
-      { "id": "m_1", "role": "author", "text": "👋 This is a **sample task** so a fresh clone isn't empty. Click the three tabs above — **Log** (an interactive page), **Code Review** (this diff), **QA Plan** — open a 💬 on any diff line, or select text on the Log page to leave a comment. Delete this `reviews/sample/` directory once you've got your own.", "ts": "2026-06-19T08:43:01.000Z", "answered": true }
+      { "id": "m_1", "role": "author", "text": "👋 This is a **sample task** so a fresh clone isn't empty. Click the three tabs above — **Log** (an interactive page), **Code Review** (this diff), **QA Plan** — open a 💬 on any diff line, or select text on the Log page to leave a comment. Delete this `work/sample/` directory once you've got your own.", "ts": "2026-06-19T08:43:01.000Z", "answered": true }
     ],
     "src/greet.js#0": [
       { "id": "m_2", "role": "author", "text": "Should `greet()` also trim whitespace from `name`?", "ts": "2026-06-19T08:43:02.000Z", "answered": true },
