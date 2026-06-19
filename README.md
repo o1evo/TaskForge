@@ -31,7 +31,7 @@ review never goes anywhere.
 Or by hand:
 
 ```bash
-git clone https://github.com/o-volosianskyi/WorkCommandCenter.git
+git clone https://github.com/o1evo/WorkCommandCenter.git
 cd WorkCommandCenter
 npm run setup     # installs deps, makes the skills global, offers a localhost hosts alias
 npm run review    # serves on http://127.0.0.1:7777
