@@ -1,7 +1,6 @@
-# Work Command Center — local, private, file-bridge work hub
+# Work Command Center (WCC)
 
-> The repo and npm package are still named `code-reviews`; the product is **Work
-> Command Center**.
+**A local-first workspace where a Claude Code session reviews your code and tracks your work** — three tabs per task, all backed by plain local files. No DB, no telemetry, nothing leaves your machine.
 
 A localhost web app for driving a single unit of work — keyed by its task id —
 across **three tabs that share one `reviews/<id>/` directory**:
@@ -24,14 +23,22 @@ review never goes anywhere.
   `Page.jsx` in the browser — no build step), `marked` (Markdown for messages,
   QA plans, and `wcc.Markdown`). No DB, no telemetry.
 
-## Run it
+## Quick start
+
+**Easiest — let Claude do it:** open this repo in **Claude Code** and ask it to
+*"set up and start WCC"*. It runs setup and launches the server for you.
+
+Or by hand:
 
 ```bash
-git clone <this-repo> && cd CodeReviews
-npm install
-npm run setup             # one step: install deps + make the skills global + offer a hosts alias
-npm run review            # starts Vite + the file-bridge API on http://127.0.0.1:7777
+git clone https://github.com/o-volosianskyi/WorkCommandCenter.git
+cd WorkCommandCenter
+npm run setup     # installs deps, makes the skills global, offers a localhost hosts alias
+npm run review    # serves on http://127.0.0.1:7777
 ```
+
+Open the printed URL — a **sample task** is already loaded, so you can click through all
+three tabs immediately. Delete `reviews/sample/` once you've imported your own.
 
 `npm run setup` also asks whether to add a `127.0.0.1 wcc` line to `/etc/hosts`
 (sudo, you can decline) so you can open WCC at **http://wcc:7777** instead of the

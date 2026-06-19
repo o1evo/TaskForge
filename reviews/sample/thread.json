@@ -1,0 +1,34 @@
+{
+  "review": {
+    "id": "sample",
+    "title": "Sample task — friendlier greet() (demo)",
+    "repo": null,
+    "base": "main",
+    "head": "demo",
+    "createdAt": "2026-06-19T08:43:01.556Z"
+  },
+  "hunks": [
+    {
+      "id": "src/greet.js#0",
+      "file": "src/greet.js",
+      "range": "@@ -1,4 +1,7 @@",
+      "diff": "@@ -1,4 +1,7 @@\n export function greet(name) {\n-  return \"Hello \" + name + \"!\";\n+  // guard the empty case so we don't render \"Hello !\"\n+  if (!name) return \"Hello there!\";\n+  return `Hello ${name}!`;\n }\n+\n+export const VERSION = \"1.0.0\";\n\n",
+      "annotations": [
+        { "tag": "praise", "severity": "low", "line": 3, "note": "Nice — guarding the empty name avoids rendering \"Hello !\"." },
+        { "tag": "suggestion", "severity": "low", "line": 7, "note": "Consider sourcing VERSION from package.json so it can't drift out of sync." }
+      ]
+    }
+  ],
+  "threads": {
+    "general": [
+      { "id": "m_1", "role": "author", "text": "👋 This is a **sample task** so a fresh clone isn't empty. Click the three tabs above — **Log** (an interactive page), **Code Review** (this diff), **QA Plan** — open a 💬 on any diff line, or select text on the Log page to leave a comment. Delete this `reviews/sample/` directory once you've got your own.", "ts": "2026-06-19T08:43:01.000Z", "answered": true }
+    ],
+    "src/greet.js#0": [
+      { "id": "m_2", "role": "author", "text": "Should `greet()` also trim whitespace from `name`?", "ts": "2026-06-19T08:43:02.000Z", "answered": true },
+      { "id": "m_3", "role": "reviewer", "text": "Good catch — `name.trim()` would also fix `\"Hello   !\"`. Worth a follow-up; the empty-guard here is the important fix, so I'd ship this and trim separately.", "ts": "2026-06-19T08:43:03.000Z", "answered": true }
+    ],
+    "log:welcome": [
+      { "id": "m_4", "role": "author", "text": "This thread is anchored to a section of the **Log** page (a `log:` target the page chose). A separate Claude Code \"reviewer\" session answers here — try asking it something.", "ts": "2026-06-19T08:43:04.000Z", "answered": false }
+    ]
+  }
+}

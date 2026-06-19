@@ -19,7 +19,7 @@ const PORT = Number(process.env.WCC_PORT) || 7777;
 function apiPlugin() {
   const handle = createApi(reviewsDir);
   return {
-    name: 'code-reviews-api',
+    name: 'wcc-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const handled = await handle(req, res);

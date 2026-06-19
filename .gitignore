@@ -1,5 +1,7 @@
 # Review data contains the source under review — never commit it.
-reviews/
+# Exception: reviews/sample/ is a curated demo shipped with the repo (first-run content).
+reviews/*
+!reviews/sample/
 
 # Per-machine Claude Code settings (personal paths / allowlist). The committed
 # skills under .claude/skills/ ARE tracked; only the local settings are ignored.
