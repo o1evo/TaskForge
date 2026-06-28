@@ -1,0 +1,85 @@
+{
+  "name": "work-command-center-vscode",
+  "displayName": "Work Command Center",
+  "description": "Render the Work Command Center (WCC) inside VS Code, with a one-click Start button when the server isn't running.",
+  "version": "0.1.0",
+  "publisher": "wcc",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "wcc",
+          "title": "Work Command Center",
+          "icon": "media/wcc.svg"
+        }
+      ]
+    },
+    "views": {
+      "wcc": [
+        {
+          "id": "wcc.sidebar",
+          "name": "Work Command Center",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "wcc.open",
+        "title": "WCC: Open",
+        "category": "Work Command Center"
+      },
+      {
+        "command": "wcc.start",
+        "title": "WCC: Start server",
+        "category": "Work Command Center"
+      },
+      {
+        "command": "wcc.stop",
+        "title": "WCC: Stop server",
+        "category": "Work Command Center"
+      },
+      {
+        "command": "wcc.restart",
+        "title": "WCC: Restart server",
+        "category": "Work Command Center"
+      },
+      {
+        "command": "wcc.openExternal",
+        "title": "WCC: Open in browser",
+        "category": "Work Command Center"
+      }
+    ],
+    "configuration": {
+      "title": "Work Command Center",
+      "properties": {
+        "wcc.rootPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Work Command Center repo (the folder containing vite.config.mjs). Leave blank to auto-detect from open workspace folders, then fall back to the extension's own location."
+        },
+        "wcc.port": {
+          "type": "number",
+          "default": 7777,
+          "description": "Port WCC listens on (mirrors WCC_PORT)."
+        },
+        "wcc.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host used to build the WCC URL rendered in the webview (e.g. 127.0.0.1 or wcc)."
+        }
+      }
+    }
+  }
+}
