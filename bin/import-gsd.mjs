@@ -112,6 +112,19 @@ function collectPhases(planningRoot) {
       const has = (suffix) => files.some((f) => f.toUpperCase().endsWith(suffix));
       const summaryFile = files.find((f) => f.toUpperCase().endsWith('SUMMARY.MD'));
       const summary = summaryFile ? firstParagraph(read(join(dir, summaryFile))) : null;
+      // Stream the phase's own artifacts so they're reviewable in-page (PLAN/RESEARCH/
+      // CONTEXT/SPEC/UAT/REVIEW/SUMMARY). Ordered so plans read first, then research.
+      const order = (f) => {
+        const u = f.toUpperCase();
+        const idx = ['BRIEF.MD', 'PLAN.MD', 'CONTEXT.MD', 'SPEC.MD', 'RESEARCH.MD', 'UAT.MD', 'REVIEW.MD', 'SUMMARY.MD']
+          .findIndex((s) => u.endsWith(s));
+        return idx === -1 ? 99 : idx;
+      };
+      const docs = files
+        .filter((f) => f.toLowerCase().endsWith('.md'))
+        .sort((a, b) => order(a) - order(b) || a.localeCompare(b))
+        .map((f) => ({ name: f, text: read(join(dir, f)) }))
+        .filter((x) => x.text);
       return {
         name: d,
         title: d.replace(/^\d+-/, '').replace(/-/g, ' '),
@@ -120,6 +133,7 @@ function collectPhases(planningRoot) {
           summary: has('SUMMARY.MD'), uat: has('UAT.MD'), review: has('REVIEW.MD'),
         },
         blurb: summary,
+        docs,
       };
     });
 }
@@ -134,6 +148,18 @@ function firstParagraph(md) {
     out.push(l.trim());
   }
   return out.join(' ').slice(0, 400) || null;
+}
+
+// Collect the codebase-map docs GSD's map-codebase writes under .planning/codebase/.
+// Generic: any *.md there is surfaced verbatim (STACK, ARCHITECTURE, CONCERNS, …).
+function collectCodebase(planningRoot) {
+  const dir = join(planningRoot, 'codebase');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.md'))
+    .sort()
+    .map((f) => ({ name: f, text: read(join(dir, f)) }))
+    .filter((d) => d.text);
 }
 
 // Find the most recent phase UAT file to seed the QA Plan tab.
@@ -246,8 +272,33 @@ function Page({ wcc }) {
                   </Row>
                 </Row>
                 {ph.blurb && <div style={{ color: C.muted, marginTop: 4 }}>{ph.blurb}</div>}
+                {ph.docs && ph.docs.length > 0 && (
+                  <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                    {ph.docs.map((doc) => (
+                      <Section key={doc.name} title={doc.name}>
+                        <Markdown text={doc.text} />
+                      </Section>
+                    ))}
+                  </div>
+                )}
                 <Thread target={"log:phase:" + ph.name} title={"Discuss phase " + ph.name} />
               </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {GSD.codebase && GSD.codebase.length > 0 && (
+        <Section title={\`Codebase Map (\${GSD.codebase.length})\`} defaultOpen>
+          <p style={{ marginTop: 0, color: C.muted, fontSize: 13 }}>
+            Streamed from <code>.planning/codebase/</code> (GSD onboarding map). Re-run the importer to refresh.
+            Each doc is collapsible; select any text to drop an inline 💬 comment for the reviewer.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {GSD.codebase.map((doc) => (
+              <Section key={doc.name} title={doc.name}>
+                <Markdown text={doc.text} />
+              </Section>
             ))}
           </div>
         </Section>
@@ -307,10 +358,14 @@ function main() {
 
   const planningRoot = resolvePlanningRoot(args);
   const stateMd = read(join(planningRoot, 'STATE.md'));
-  if (!stateMd) die(`no STATE.md under ${planningRoot} — is this a GSD planning tree?`);
-  const { data: fm, body: stateBody } = parseFrontmatter(stateMd);
   const roadmap = read(join(planningRoot, 'ROADMAP.md'));
   const phases = collectPhases(planningRoot);
+  const codebase = collectCodebase(planningRoot);
+  // A freshly-onboarded tree may only have a codebase map (no STATE/ROADMAP/phases
+  // until gsd-new-project runs). Accept any non-empty planning tree.
+  if (!stateMd && !roadmap && phases.length === 0 && codebase.length === 0)
+    die(`nothing to import under ${planningRoot} (no STATE.md / ROADMAP.md / phases / codebase) — is this a GSD planning tree?`);
+  const { data: fm, body: stateBody } = parseFrontmatter(stateMd);
 
   const title = args.title || fm.milestone_name || `GSD: ${basename(planningRoot)}`;
   const id = slug(args.id || title);
@@ -326,6 +381,7 @@ function main() {
     progress: fm.progress || {},
     resume: null,
     phases,
+    codebase,
     state: stateBody ? stateBody.trim() : null,
     roadmap: roadmap ? roadmap.trim() : null,
   };
@@ -377,7 +433,7 @@ function main() {
 
   console.log(`Wrote work/${id}/ (Page.jsx + thread.json + qa-plan.md)`);
   console.log(`  planning: ${planningRoot}`);
-  console.log(`  ${phases.length} phases · ${review.hunks.length} diff hunks · QA ${uat ? `from ${uat.phase}` : '(stub)'}`);
+  console.log(`  ${phases.length} phases · ${codebase.length} codebase docs · ${review.hunks.length} diff hunks · QA ${uat ? `from ${uat.phase}` : '(stub)'}`);
   console.log(`\nStart the app:  npm run review`);
   console.log(`Then open id:   ${id}`);
 }
