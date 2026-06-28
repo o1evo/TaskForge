@@ -222,24 +222,27 @@ function Page({ wcc }) {
 
       {GSD.phases.length > 0 && (
         <Section title={\`Phases (\${GSD.phases.length})\`} defaultOpen>
-          <table style={tbl}>
-            <thead><tr>{['phase', 'artifacts', 'summary'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {GSD.phases.map((ph) => (
-                <tr key={ph.name}>
-                  <td style={td}><code>{ph.name}</code></td>
-                  <td style={td}>
-                    <Row style={{ flexWrap: 'wrap', gap: 4 }}>
-                      {Object.entries(ph.artifacts).filter(([, v]) => v).map(([k]) => (
-                        <span key={k} style={{ ...tag, color: C.muted, borderColor: C.border }}>{k}</span>
-                      ))}
-                    </Row>
-                  </td>
-                  <td style={{ ...td, color: C.muted }}>{ph.blurb || <span style={{ opacity: 0.5 }}>—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p style={{ marginTop: 0, color: C.muted, fontSize: 13 }}>
+            Each phase has its own discussion thread. A <strong>Decision</strong> /
+            <strong> Open question</strong> / <strong>Blocker</strong> raised in it is captured back to
+            <em> that phase's</em> GSD artifact (phase-scoped routing), not the global bucket.
+          </p>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {GSD.phases.map((ph) => (
+              <div key={ph.name} style={card}>
+                <Row style={{ flexWrap: 'wrap' }}>
+                  <code style={{ fontWeight: 600 }}>{ph.name}</code>
+                  <Row style={{ flexWrap: 'wrap', gap: 4, marginLeft: 'auto' }}>
+                    {Object.entries(ph.artifacts).filter(([, v]) => v).map(([k]) => (
+                      <span key={k} style={{ ...tag, color: C.muted, borderColor: C.border }}>{k}</span>
+                    ))}
+                  </Row>
+                </Row>
+                {ph.blurb && <div style={{ color: C.muted, marginTop: 4 }}>{ph.blurb}</div>}
+                <Thread target={"log:phase:" + ph.name} title={"Discuss phase " + ph.name} />
+              </div>
+            ))}
+          </div>
         </Section>
       )}
 

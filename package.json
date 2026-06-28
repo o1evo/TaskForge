@@ -10,6 +10,9 @@
     "build": "vite build",
     "serve": "node server/serve.mjs",
     "import": "node bin/import.mjs",
+    "import-gsd": "node bin/import-gsd.mjs",
+    "capture-gsd": "node bin/capture-gsd.mjs",
+    "test:gsd": "node test/gsd-smoke.mjs",
     "install-skill": "node bin/install-skill.mjs",
     "uninstall-skill": "node bin/uninstall.mjs"
   },

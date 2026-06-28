@@ -39,6 +39,24 @@ const MARKERS = [
   { re: /\*\*Blocker:\*\*\s*(.+)/i, kind: 'Blocker', target: 'STATE.md → Blockers/Concerns' },
 ];
 
+// Route an outcome to its GSD target. A thread anchored to a phase
+// (key `log:phase:<dir>`, emitted by import-gsd's per-phase discussion threads)
+// files into THAT phase's artifact — so a decision about phase 06 lands in its
+// CONTEXT, not the global bucket. Everything else (general / code-review / free
+// log comments) keeps the global, kind-based target.
+function targetFor(marker, key) {
+  const ph = key.match(/^log:phase:(.+)$/);
+  if (!ph) return marker.target;
+  const name = ph[1];
+  const num = (name.match(/^(\d+)/) || [])[1];
+  const ctx = num ? `phases/${name}/${num}-CONTEXT.md` : `phases/${name}/ (CONTEXT)`;
+  // Blockers stay centrally tracked in STATE, tagged with the phase; decisions
+  // and open questions about a phase belong in that phase's CONTEXT.
+  return marker.kind === 'Blocker'
+    ? `STATE.md → Blockers/Concerns (phase ${name})`
+    : `${ctx} (phase ${marker.kind.toLowerCase()})`;
+}
+
 const HEADER = `# WCC Captures
 
 > **WCC-owned handoff file — GSD does not reconstruct this.** \`bin/capture-gsd.mjs\`
@@ -131,9 +149,10 @@ function main() {
           continue;
         }
         if (msg.captured) { skipped.push({ key, kind: m.kind, reason: 'thread already stamped captured' }); continue; }
-        captures += renderEntry(marker, m.kind, hit[1], key, msg.id, date, workId, m.target);
+        const target = targetFor(m, key);
+        captures += renderEntry(marker, m.kind, hit[1], key, msg.id, date, workId, target);
         msg.captured = true;
-        captured.push({ key, kind: m.kind, target: m.target });
+        captured.push({ key, kind: m.kind, target });
       }
     }
   }
