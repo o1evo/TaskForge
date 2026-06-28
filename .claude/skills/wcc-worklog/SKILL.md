@@ -34,15 +34,40 @@ tracker. Pull out only what you need (title, status, description, links).
 
 ### 2. Ask about branch setup
 
-Before touching code, ask: *"Check out the main branch, pull, and create a new branch?"* If yes,
-use a descriptive branch name — e.g. `<feature|fix>/<short-task-name>[-<task-id>]`:
+What a new branch is **based on** varies by repo and team — `main`, a `develop` branch, or the
+latest release tag (for a tag-based deploy flow where `main` is not a stable release). So the
+skill **asks once per target repo and remembers the answer** in `.wcc/worklog.json` (gitignored,
+machine-local — never hard-code one team's convention here). Default is `main`.
+
+Read the remembered base for this repo:
 
 ```bash
-git checkout main && git pull
-git checkout -b <branch-name>
+repo=<repo-path>
+base=$(node -e 'const fs=require("fs"),f=".wcc/worklog.json";const j=fs.existsSync(f)?JSON.parse(fs.readFileSync(f)):{};process.stdout.write((j.branchBase||{})[process.argv[1]]||"")' "$repo")
 ```
 
-`feature` vs `fix` — bug → `fix`, else `feature`; if ambiguous, ask.
+- **First time for this repo (`base` empty):** ask *"What should new branches in `<repo>` be based
+  on — `main`, the latest release tag, or something else?"* Persist their choice (store a literal
+  ref, or the token `latest-release-tag` to always pick the newest `release-*` tag):
+
+  ```bash
+  node -e 'const fs=require("fs"),f=".wcc/worklog.json";const j=fs.existsSync(f)?JSON.parse(fs.readFileSync(f)):{};(j.branchBase||(j.branchBase={}))[process.argv[1]]=process.argv[2];fs.writeFileSync(f,JSON.stringify(j,null,2)+"\n")' "$repo" "<their-answer>"
+  ```
+
+- **Resolve + branch** (a literal ref is used as-is; `latest-release-tag` resolves to the newest
+  tag). Name it `<feature|fix>/<short-task-name>[-<task-id>]` (bug → `fix`, else `feature`; if
+  ambiguous, ask):
+
+  ```bash
+  if [ "$base" = "latest-release-tag" ]; then
+    git -C "$repo" fetch --tags -q
+    base=$(git -C "$repo" tag -l 'release-*' --sort=-creatordate | head -1)
+  fi
+  echo "Branching from ${base:=main}"
+  git -C "$repo" checkout -b <branch-name> "$base"
+  ```
+
+The resolved `$base` is also what you pass to `--base` when importing the diff (next section).
 
 ### 3. Investigate first when the behavior is unclear
 
@@ -66,10 +91,13 @@ A task shows up in the app only once `work/<id>/` exists. Create it by importing
 (this also populates the Code Review tab), from the CodeReviews repo root:
 
 ```bash
-node bin/import.mjs --repo <repo-path> --base main --head WORKTREE \
+node bin/import.mjs --repo <repo-path> --base "$base" --head WORKTREE \
   --title "<task name>" --id <id>
 ```
 
+- `--base "$base"` — the **same base you branched from** (the remembered value from step 2). The
+  review diff then shows only your branch's changes; basing it on the wrong ref folds in every
+  commit that ref carries ahead of your branch point as noise.
 - `--head WORKTREE` diffs the working tree vs base — normal, since branch work is usually
   uncommitted. **As code lands each round, re-sync the diff with
   `node bin/import.mjs --id <id> --refresh`** — it rewrites the hunks but preserves the
