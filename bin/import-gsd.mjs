@@ -123,8 +123,16 @@ function collectPhases(planningRoot) {
       const docs = files
         .filter((f) => f.toLowerCase().endsWith('.md'))
         .sort((a, b) => order(a) - order(b) || a.localeCompare(b))
-        .map((f) => ({ name: f, text: read(join(dir, f)) }))
-        .filter((x) => x.text);
+        .map((f) => {
+          const text = read(join(dir, f));
+          if (!text) return null;
+          const u = f.toUpperCase();
+          let kind = 'prose', plan = null, matrix = null;
+          if (u.endsWith('PLAN.MD')) { kind = 'plan'; plan = parsePlan(text); }
+          else if (u.endsWith('UAT.MD')) { matrix = parseQaMatrix(text); kind = matrix.length ? 'uat' : 'prose'; }
+          return { name: f, text, kind, plan, matrix };
+        })
+        .filter(Boolean);
       return {
         name: d,
         title: d.replace(/^\d+-/, '').replace(/-/g, ' '),
@@ -148,6 +156,91 @@ function firstParagraph(md) {
     out.push(l.trim());
   }
   return out.join(' ').slice(0, 400) || null;
+}
+
+// ── Parse GSD's structured artifacts into rich-render data ────────────────────
+// GSD .md files are NOT prose — PLAN.md has YAML frontmatter + <task> XML, UAT.md
+// has GFM tables. We parse that structure so the page can render React (cards,
+// grids) instead of dumping markdown. Prose (RESEARCH/BRIEF/SUMMARY) stays markdown.
+function unesc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
+function splitFm(md) {
+  const m = (md || '').match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  return m ? { fm: m[1], body: m[2] } : { fm: '', body: md || '' };
+}
+function fmScalar(fm, key) {
+  const m = fm.match(new RegExp('^\\s*' + key + ':\\s*(.+)$', 'm'));
+  return m ? m[1].trim().replace(/^["']|["']$/g, '') : null;
+}
+function fmInlineArray(fm, key) {
+  const m = fm.match(new RegExp('^\\s*' + key + ':\\s*\\[(.*)\\]\\s*$', 'm'));
+  return m ? m[1].split(',').map((s) => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean) : null;
+}
+// Items of a YAML block list under `label:` — works at any indent / nesting depth
+// (stops at the first line that isn't a `- ` item, i.e. the next key).
+function fmList(fm, label) {
+  const lines = fm.split('\n');
+  const i = lines.findIndex((l) => new RegExp('^\\s*' + label + ':\\s*$').test(l));
+  if (i === -1) return [];
+  const out = [];
+  for (let j = i + 1; j < lines.length; j++) {
+    const m = lines[j].match(/^\s*-\s+(.*)$/);
+    if (!m) break;
+    out.push(m[1].trim().replace(/^["']|["']$/g, ''));
+  }
+  return out;
+}
+function parsePlan(md) {
+  const { fm, body } = splitFm(md);
+  const tasks = [];
+  const re = /<task\b([^>]*)>([\s\S]*?)<\/task>/g;
+  let t;
+  while ((t = re.exec(body))) {
+    const attrs = t[1] || '', inner = t[2] || '';
+    const grab = (tag) => {
+      const m = inner.match(new RegExp('<' + tag + '\\b[^>]*>([\\s\\S]*?)<\\/' + tag + '>'));
+      return m ? m[1].trim() : '';
+    };
+    const at = (k) => { const m = attrs.match(new RegExp(k + '="([^"]*)"')); return m ? m[1] : ''; };
+    tasks.push({
+      name: unesc(grab('name')), type: at('type'), tdd: at('tdd') === 'true', gate: at('gate'),
+      files: unesc(grab('files')), action: unesc(grab('action')),
+      verify: unesc(grab('automated') || grab('human-check') || grab('verify')),
+      done: unesc(grab('done')),
+    });
+  }
+  return {
+    wave: fmScalar(fm, 'wave'), type: fmScalar(fm, 'type'), autonomous: fmScalar(fm, 'autonomous'),
+    depends_on: fmInlineArray(fm, 'depends_on') || fmList(fm, 'depends_on'),
+    requirements: fmInlineArray(fm, 'requirements') || fmList(fm, 'requirements'),
+    files_modified: fmList(fm, 'files_modified'),
+    truths: fmList(fm, 'truths'), artifacts: fmList(fm, 'artifacts'), prohibitions: fmList(fm, 'prohibitions'),
+    tasks,
+  };
+}
+// GFM tables → {title, headers, rows}[] so a UAT/matrix renders as a real grid.
+function parseQaMatrix(md) {
+  const { body } = splitFm(md);
+  const lines = body.split('\n');
+  const tables = [];
+  let heading = null;
+  const cells = (s) => s.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^#{1,6}\s+(.*)$/);
+    if (h) { heading = h[1].trim(); continue; }
+    if (/^\s*\|.*\|\s*$/.test(lines[i]) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] || '')) {
+      const headers = cells(lines[i]);
+      const rows = [];
+      let j = i + 2;
+      for (; j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j]); j++) rows.push(cells(lines[j]));
+      tables.push({ title: heading, headers, rows });
+      i = j - 1;
+    }
+  }
+  return tables;
 }
 
 // Collect the codebase-map docs GSD's map-codebase writes under .planning/codebase/.
@@ -275,8 +368,10 @@ function Page({ wcc }) {
                 {ph.docs && ph.docs.length > 0 && (
                   <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
                     {ph.docs.map((doc) => (
-                      <Section key={doc.name} title={doc.name}>
-                        <Markdown text={doc.text} />
+                      <Section key={doc.name} title={doc.name} defaultOpen={doc.kind === 'plan' || doc.kind === 'uat'}>
+                        {doc.kind === 'plan' ? <PlanView plan={doc.plan} raw={doc.text} Markdown={Markdown} />
+                          : doc.kind === 'uat' ? <QaMatrix tables={doc.matrix} raw={doc.text} Markdown={Markdown} />
+                          : <Markdown text={doc.text} />}
                       </Section>
                     ))}
                   </div>
@@ -344,8 +439,112 @@ function Pill({ children }) {
 function Row({ children, style, onClick }) {
   return <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 8, ...style }}>{children}</div>;
 }
+
+// Rich structured render of a GSD PLAN.md (frontmatter chips + must-haves + task cards).
+function PlanView({ plan, raw, Markdown }) {
+  if (!plan) return <Markdown text={raw} />;
+  const chip = (txt, col) => <span style={{ ...tag, color: col || C.muted, borderColor: col || C.border }}>{txt}</span>;
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      <Row style={{ flexWrap: 'wrap', gap: 6 }}>
+        {plan.wave && chip('wave ' + plan.wave, C.link)}
+        {plan.type && chip(plan.type)}
+        {plan.autonomous && chip(plan.autonomous === 'true' ? 'autonomous' : 'checkpoint', plan.autonomous === 'true' ? C.ok : C.warn)}
+        {(plan.requirements || []).map((r) => <span key={r} style={{ ...tag, color: C.link, borderColor: C.link }}>{r}</span>)}
+      </Row>
+      {plan.depends_on && plan.depends_on.length > 0 && (
+        <div style={{ color: C.muted, fontSize: 12 }}>depends on: {plan.depends_on.join(', ')}</div>
+      )}
+      {plan.files_modified && plan.files_modified.length > 0 && (
+        <div>
+          <div style={lbl}>Files</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {plan.files_modified.map((f) => <code key={f} style={{ ...tag, textTransform: 'none', color: C.text, borderColor: C.border }}>{f}</code>)}
+          </div>
+        </div>
+      )}
+      {plan.truths && plan.truths.length > 0 && (
+        <div>
+          <div style={lbl}>Must be true</div>
+          <ul style={{ margin: 0, paddingLeft: 18, color: C.text }}>
+            {plan.truths.map((t, i) => <li key={i} style={{ marginBottom: 2 }}>{t}</li>)}
+          </ul>
+        </div>
+      )}
+      {plan.tasks && plan.tasks.length > 0 && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={lbl}>Tasks ({plan.tasks.length})</div>
+          {plan.tasks.map((t, i) => <TaskCard key={i} task={t} Markdown={Markdown} />)}
+        </div>
+      )}
+      <Section title="Raw PLAN.md"><Markdown text={raw} /></Section>
+    </div>
+  );
+}
+
+function TaskCard({ task, Markdown }) {
+  const [open, setOpen] = useState(false);
+  const isCheckpoint = (task.type || '').indexOf('checkpoint') === 0 || task.gate === 'blocking';
+  return (
+    <div style={{ ...card, borderLeft: '3px solid ' + (isCheckpoint ? C.warn : C.border) }}>
+      <Row onClick={() => setOpen((v) => !v)} style={{ cursor: 'pointer', flexWrap: 'wrap', gap: 6 }}>
+        <span style={{ color: C.muted }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontWeight: 600 }}>{task.name}</span>
+        <Row style={{ marginLeft: 'auto', gap: 4, flexWrap: 'wrap' }}>
+          {task.tdd && <span style={{ ...tag, color: C.ok, borderColor: C.ok }}>tdd</span>}
+          {isCheckpoint && <span style={{ ...tag, color: C.warn, borderColor: C.warn }}>checkpoint</span>}
+        </Row>
+      </Row>
+      {open && (
+        <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+          {task.action && <div><div style={lbl}>Action</div><Markdown text={task.action} /></div>}
+          {task.verify && <div><div style={lbl}>Verify</div><pre style={preBox}>{task.verify}</pre></div>}
+          {task.done && <div><div style={lbl}>Done when</div><div style={{ color: C.muted }}>{task.done}</div></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QaResult({ text }) {
+  const t = text || '';
+  let col = C.muted;
+  if (/PASS/i.test(t) || t.indexOf('✅') >= 0) col = C.ok;
+  else if (/FAIL/i.test(t) || t.indexOf('❌') >= 0) col = '#f85149';
+  else if (/PENDING/i.test(t) || t.indexOf('⏳') >= 0) col = C.warn;
+  else if (/PARTIAL/i.test(t) || t.indexOf('🟡') >= 0) col = '#d29922';
+  return <span style={{ color: col, fontWeight: 600 }}>{t}</span>;
+}
+
+// Rich structured render of a GSD UAT/QA matrix (GFM tables → colored result grid).
+function QaMatrix({ tables, raw, Markdown }) {
+  if (!tables || !tables.length) return <Markdown text={raw} />;
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {tables.map((tb, ti) => {
+        const ri = tb.headers.findIndex((h) => /result|status/i.test(h));
+        return (
+          <div key={ti}>
+            {tb.title && <div style={{ fontWeight: 600, marginBottom: 6 }}>{tb.title}</div>}
+            <table style={tbl}>
+              <thead><tr>{tb.headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {tb.rows.map((r, i) => (
+                  <tr key={i}>{r.map((c, j) => <td key={j} style={td}>{j === ri ? <QaResult text={c} /> : c}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+      <Section title="Raw UAT.md"><Markdown text={raw} /></Section>
+    </div>
+  );
+}
 const card = { border: \`1px solid \${C.border}\`, borderRadius: 8, padding: '8px 12px', background: C.panel2 };
 const tag = { border: '1px solid', borderRadius: 4, padding: '0 6px', fontSize: 11, textTransform: 'uppercase' };
+const lbl = { fontWeight: 600, fontSize: 11, textTransform: 'uppercase', color: C.muted, marginBottom: 3, letterSpacing: 0.3 };
+const preBox = { background: '#0d1117', border: '1px solid ' + C.border, borderRadius: 6, padding: '8px 10px', overflow: 'auto', fontSize: 12, margin: 0, whiteSpace: 'pre-wrap' };
 const tbl = { width: '100%', borderCollapse: 'collapse', fontSize: 13 };
 const th = { textAlign: 'left', padding: '6px 10px', borderBottom: \`1px solid \${C.border}\`, color: C.muted, fontWeight: 600 };
 const td = { padding: '6px 10px', borderBottom: \`1px solid \${C.border}\`, verticalAlign: 'top' };
