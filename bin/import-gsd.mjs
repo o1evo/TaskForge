@@ -220,6 +220,13 @@ function Page({ wcc }) {
         </div>
       )}
 
+      {GSD.diagram && (
+        <Section title="Architecture" defaultOpen>
+          <img src={GSD.diagram} alt="architecture diagram"
+               style={{ width: '100%', height: 'auto', background: '#0d1117', borderRadius: 8, border: '1px solid ' + C.border }} />
+        </Section>
+      )}
+
       {GSD.phases.length > 0 && (
         <Section title={\`Phases (\${GSD.phases.length})\`} defaultOpen>
           <p style={{ marginTop: 0, color: C.muted, fontSize: 13 }}>
@@ -327,6 +334,13 @@ function main() {
 
   const dir = join(ROOT, 'work', id);
   mkdirSync(dir, { recursive: true });
+
+  // Optional architecture diagram: if work/<id>/architecture.svg exists, embed it
+  // inline so it survives re-imports (drop a rendered .svg there and re-run).
+  const svgPath = join(dir, 'architecture.svg');
+  gsd.diagram = existsSync(svgPath)
+    ? 'data:image/svg+xml;base64,' + readFileSync(svgPath).toString('base64')
+    : null;
 
   // Page.jsx — the Log tab.
   writeAtomic(join(dir, 'Page.jsx'), renderPage(gsd));
