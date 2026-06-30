@@ -12,6 +12,7 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
   const [positions, setPositions] = useState({}); // key -> rects[]
   const [orphans, setOrphans] = useState([]); // keys whose quote no longer resolves
   const [pending, setPending] = useState(null); // { quote, prefix, suffix, rect }
+  const [draft, setDraft] = useState(null); // an in-memory anchor not yet persisted (no thread until first send)
   const [openKey, setOpenKey] = useState(null);
   const [showOrphans, setShowOrphans] = useState(false);
   const popRef = useRef(null);
@@ -69,27 +70,39 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
     return () => document.removeEventListener('mouseup', onMouseUp);
   }, [pageRef]);
 
-  // Close the popover on outside click / Escape.
+  // Close the popover (or discard an untyped draft) on outside click / Escape.
   useEffect(() => {
-    if (!openKey) return;
+    if (!openKey && !draft) return;
+    function close() { setOpenKey(null); setDraft(null); }
     function onDown(e) {
       if (e.target.closest && e.target.closest('[data-wcc-ui]')) return;
-      setOpenKey(null);
+      close();
     }
-    function onKey(e) { if (e.key === 'Escape') setOpenKey(null); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [openKey]);
+  }, [openKey, draft]);
 
-  async function createFromPending() {
+  // "Comment" opens an in-memory DRAFT composer — it does NOT persist an anchor yet,
+  // so cancelling without typing leaves nothing behind (no empty thread / stray highlight).
+  function startDraft() {
     if (!pending) return;
-    const key = freshKey();
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
+    setDraft({ key: freshKey(), quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix, start: pending.start, end: pending.end, rect: pending.rect });
     setPending(null);
-    await onCreate({ key, quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix, start: pending.start, end: pending.end });
-    setOpenKey(key); // open the composer; highlight appears on the next recompute
+  }
+
+  // First send is what actually creates the comment: persist the anchor, post the
+  // message, then promote the draft to a normal open anchor.
+  async function sendDraft(text) {
+    const d = draft;
+    if (!d) return;
+    await onCreate({ key: d.key, quote: d.quote, prefix: d.prefix, suffix: d.suffix, start: d.start, end: d.end });
+    await onSend(d.key, text);
+    setDraft(null);
+    setOpenKey(d.key); // highlight appears on the next recompute
   }
 
   const openAnchor = openKey ? (anchors || {})[openKey] : null;
@@ -115,15 +128,36 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
       })}
 
       {/* floating Comment button on a fresh selection */}
-      {pending && !openKey && (
+      {pending && !openKey && !draft && (
         <button
           className="wcc-comment-btn"
           style={{ top: Math.max(0, pending.rect.top - 34), left: pending.rect.left }}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={createFromPending}
+          onClick={startDraft}
         >
           💬 Comment
         </button>
+      )}
+
+      {/* draft: a not-yet-persisted comment — highlight + composer; nothing is saved
+          until the first message is sent (cancel/✕ leaves no anchor or empty thread) */}
+      {draft && draft.rect && (
+        <div className="wcc-hl active" style={{ top: draft.rect.top, left: draft.rect.left, width: draft.rect.width, height: draft.rect.height }} />
+      )}
+      {draft && (
+        <div
+          ref={popRef}
+          className="wcc-popover"
+          style={{ top: draft.rect.top + draft.rect.height + 6, left: clampLeft(draft.rect.left, pageRef) }}
+        >
+          <div className="wcc-popover-head">
+            <span className="wcc-quote">“{truncate(draft.quote, 80)}”</span>
+            <div className="wcc-popover-actions">
+              <button className="wcc-act" title="Cancel" aria-label="Cancel" onClick={() => setDraft(null)}>✕</button>
+            </div>
+          </div>
+          <Thread messages={[]} onSend={sendDraft} compact />
+        </div>
       )}
 
       {/* the thread popover */}
