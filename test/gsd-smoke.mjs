@@ -93,6 +93,9 @@ try {
       'log:gsd-discussion': [
         { id: 'b', role: 'reviewer', text: '**Decision:** A global, non-phase decision.', ts: '2026-01-01T01:01:00.000Z', answered: true },
       ],
+      'log:phase:02-bar': [
+        { id: 'c', role: 'reviewer', text: 'Sounds right.\n\n**Decision:** Bar ships behind a flag.\n\n**Open question:** Who owns the flag rollout?', ts: '2026-01-01T01:02:00.000Z', answered: true },
+      ],
     },
   };
   writeFileSync(join(WORK, 'thread.json'), JSON.stringify(thread, null, 2) + '\n');
@@ -103,6 +106,8 @@ try {
   const caps = readFileSync(join(sandbox, '.planning', 'WCC-CAPTURES.md'), 'utf8');
   ok(/phases\/01-foo\/01-CONTEXT\.md \(phase decision\)/.test(caps), 'phase-anchored decision routes to the phase CONTEXT');
   ok(/PROJECT\.md → Key Decisions/.test(caps), 'global decision routes to PROJECT Key Decisions');
+  ok(/Bar ships behind a flag/.test(caps) && /Who owns the flag rollout/.test(caps),
+     'a message with BOTH a Decision and an Open question captures both (kind-specific marker)');
   ok(readFileSync(join(sandbox, '.planning', 'STATE.md'), 'utf8') === readFileSync(join(FIXTURE, 'STATE.md'), 'utf8'),
      'capture leaves GSD-reconstructed STATE.md byte-identical');
 

@@ -19,9 +19,13 @@
 //
 // The marker is the gate: a thread is captured only once a reviewer message states
 // a marked outcome — distillation stays a human judgment, not machine summary.
-// Idempotent two ways: each message is stamped {captured:true} in thread.json, and
-// each entry carries a stable <!-- wcc:<key>#<msg> --> marker so re-runs never
-// duplicate even if the stamp is lost.
+// Idempotent via a stable per-(thread, message, KIND) marker
+// <!-- wcc:<key>#<msg>:<kind> --> on each entry, so re-runs never duplicate AND a single
+// message that states multiple outcomes (e.g. a Decision AND an Open question) yields one
+// entry per kind. (The msg is also stamped {captured:true} for the UI, but the file marker
+// is the sole idempotency source.) MIGRATION: pre-fix markers were kind-agnostic
+// <!-- wcc:<key>#<msg> -->; on first run after upgrading, a previously-captured outcome may
+// be re-appended once under the new kind-suffixed marker, then is idempotent thereafter.
 //
 // Usage:
 //   node bin/capture-gsd.mjs --id <id> --planning <path> [--workstream <name>] [--dry-run]
@@ -99,6 +103,7 @@ function resolvePlanningRoot(args) {
 }
 
 function oneLine(s) { return s.replace(/\s+/g, ' ').trim(); }
+function kindSlug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function writeAtomic(out, contents) {
   const tmp = `${out}.tmp`;
   writeFileSync(tmp, contents);
@@ -138,22 +143,25 @@ function main() {
   for (const [key, msgs] of Object.entries(review.threads || {})) {
     for (const msg of msgs) {
       if (msg.role !== 'reviewer') continue;
+      let any = false;
       for (const m of MARKERS) {
         const hit = msg.text.match(m.re);
         if (!hit) continue;
-        const marker = `wcc:${key}#${msg.id}`;
-        // Idempotent on the file (stable marker) AND on the thread (captured stamp).
+        // Per-(thread, message, KIND) marker — so a message stating both a **Decision:**
+        // and an **Open question:** produces both entries (not just the first). The file
+        // marker is the sole idempotency gate; msg.captured below is an informational stamp.
+        const marker = `wcc:${key}#${msg.id}:${kindSlug(m.kind)}`;
         if (captures.includes(`<!-- ${marker} -->`)) {
           skipped.push({ key, kind: m.kind, reason: 'already in WCC-CAPTURES.md' });
-          msg.captured = true;
+          any = true;
           continue;
         }
-        if (msg.captured) { skipped.push({ key, kind: m.kind, reason: 'thread already stamped captured' }); continue; }
         const target = targetFor(m, key);
         captures += renderEntry(marker, m.kind, hit[1], key, msg.id, date, workId, target);
-        msg.captured = true;
         captured.push({ key, kind: m.kind, target });
+        any = true;
       }
+      if (any) msg.captured = true;
     }
   }
 
