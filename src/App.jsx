@@ -56,18 +56,21 @@ export default function App() {
         setFindOpen(true);
       } else if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C')) {
         // Copy the current text selection. Inside the VS Code webview iframe the
-        // default ⌘C/Ctrl+C doesn't reliably reach the clipboard, so when there's
-        // a real selection (and we're not in an editable field, which handles its
-        // own copy) we write it ourselves. No selection → leave the default alone.
+        // default ⌘C/Ctrl+C doesn't reach the clipboard (cross-origin permissions
+        // policy), so when there's a real selection — and we're not in an editable
+        // field, which handles its own copy — we copy it ourselves. No selection →
+        // leave the default alone.
         const el = document.activeElement;
         const editable = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
         if (editable) return;
         const text = (window.getSelection()?.toString()) || '';
         if (!text) return;
-        if (navigator.clipboard && window.isSecureContext) {
-          e.preventDefault();
-          navigator.clipboard.writeText(text).catch(() => { /* fall through to default on a later attempt */ });
-        }
+        e.preventDefault();
+        // Browser / permitted contexts: the async Clipboard API.
+        try { if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).catch(() => {}); } catch { /* ignore */ }
+        // VS Code webview: hand the text to the extension host, which always has
+        // clipboard access. The webview shell forwards this to vscode.env.clipboard.
+        try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'wcc-clipboard-write', text }, '*'); } catch { /* ignore */ }
       }
     }
     document.addEventListener('keydown', onKey);
