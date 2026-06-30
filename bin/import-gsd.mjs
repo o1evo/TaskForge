@@ -292,6 +292,26 @@ function buildTraceability(phases) {
   }));
 }
 
+// Execution-order view: group phases by their PLAN's `wave` (lower runs first), carrying
+// `depends_on` per phase. Returns groups sorted by wave, unscheduled (no wave) last.
+function buildWaves(phases) {
+  const items = [];
+  for (const ph of phases) {
+    const pd = (ph.docs || []).find((d) => d.kind === 'plan' && d.plan);
+    if (!pd) continue;
+    items.push({
+      phase: ph.name,
+      wave: pd.plan.wave != null ? String(pd.plan.wave) : null,
+      type: pd.plan.type || null,
+      dependsOn: pd.plan.depends_on || [],
+    });
+  }
+  const groups = {};
+  for (const it of items) { const k = it.wave == null ? '∞' : it.wave; (groups[k] ||= []).push(it); }
+  const keys = Object.keys(groups).sort((a, b) => (a === '∞' ? 1 : b === '∞' ? -1 : Number(a) - Number(b)));
+  return keys.map((k) => ({ wave: k === '∞' ? null : k, items: groups[k] }));
+}
+
 // Find the most recent phase UAT file to seed the QA Plan tab.
 function latestUat(planningRoot) {
   const phasesDir = join(planningRoot, 'phases');
@@ -449,6 +469,35 @@ function Page({ wcc }) {
               ))}
             </tbody>
           </table>
+        </Section>
+      )}
+
+      {GSD.waves && GSD.waves.length > 0 && (
+        <Section title="Execution waves" defaultOpen>
+          <p style={{ marginTop: 0, color: C.muted, fontSize: 13 }}>
+            Phase plans grouped by <code>wave</code> (lower runs first); each phase's
+            <code> depends_on</code> is shown on the right.
+          </p>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {GSD.waves.map((grp, gi) => (
+              <div key={gi}>
+                <div style={lbl}>{grp.wave == null ? 'Unscheduled' : 'Wave ' + grp.wave}</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {grp.items.map((it) => (
+                    <div key={it.phase} style={card}>
+                      <Row style={{ flexWrap: 'wrap' }}>
+                        <code style={{ fontWeight: 600 }}>{it.phase}</code>
+                        {it.type && <span style={{ ...tag, color: C.muted, borderColor: C.border }}>{it.type}</span>}
+                        {it.dependsOn.length > 0 && (
+                          <span style={{ marginLeft: 'auto', color: C.muted, fontSize: 12 }}>depends on: {it.dependsOn.join(', ')}</span>
+                        )}
+                      </Row>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </Section>
       )}
 
@@ -653,6 +702,7 @@ function main() {
     resume: null,
     phases,
     traceability: buildTraceability(phases),
+    waves: buildWaves(phases),
     codebase,
     state: stateBody ? stateBody.trim() : null,
     roadmap: roadmap ? roadmap.trim() : null,

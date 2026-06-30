@@ -82,6 +82,9 @@ try {
   ok(rendered.includes('PASS') && rendered.includes('PENDING'), 'UAT rendered as a QA grid with result cells');
   ok(rendered.includes('Requirement traceability'), 'requirement-traceability grid rendered');
   ok(rendered.includes('no UAT'), 'a declared-but-unverified requirement (FOO-02) is flagged "no UAT"');
+  ok(rendered.includes('Execution waves') && rendered.includes('Wave 1') && rendered.includes('Wave 2'),
+     'execution-wave view groups phases by wave');
+  ok(/depends on:\s+01-foo/.test(rendered), 'wave view renders the depends_on edge (02-bar → 01-foo)');
 
   const qa = readFileSync(join(WORK, 'qa-plan.md'), 'utf8');
   ok(qa.includes('Bar renders for a fresh tenant'), 'QA plan seeded from latest phase UAT');
