@@ -7,9 +7,18 @@ import React, { useMemo, useState } from 'react';
 const SEV_ORDER = ['blocker', 'high', 'medium', 'low', 'resolved', 'note'];
 const SEV_LABEL = { blocker: 'Blocker', high: 'High', medium: 'Medium', low: 'Low', resolved: 'Resolved', note: 'Note' };
 
-export default function ReviewSidebar({ hunks, threads, onJump, onClose }) {
+export default function ReviewSidebar({ hunks, threads, anchors, onJump, onClose, onDeleteThread, onDeleteAnchor, onSetAnchorState }) {
   const [findingFilter, setFindingFilter] = useState('open'); // open | all
   const [commentFilter, setCommentFilter] = useState('all');  // all | pending
+
+  // Delete a thread from the index. Log threads (free-selection comments) own an
+  // anchor, so they delete via onDeleteAnchor; code-review threads via onDeleteThread.
+  function removeRow(c) {
+    const fn = c.kind === 'log' ? onDeleteAnchor : onDeleteThread;
+    if (!fn) return;
+    if (!window.confirm(`Delete this ${c.kind === 'log' ? 'comment' : 'thread'} and its messages? This cannot be undone.`)) return;
+    fn(c.key);
+  }
 
   // Findings: flatten annotations, tag each with its hunk's file for context.
   const findings = useMemo(() => {
@@ -32,9 +41,15 @@ export default function ReviewSidebar({ hunks, threads, onJump, onClose }) {
   const bySev = SEV_ORDER.map((sev) => [sev, shownFindings.filter((f) => f.sev === sev)]).filter(([, xs]) => xs.length);
 
   // Comments: every thread with messages, labeled + resolved to a scroll target.
-  const comments = useMemo(() => buildComments(hunks, threads), [hunks, threads]);
+  const comments = useMemo(() => buildComments(hunks, threads, anchors), [hunks, threads, anchors]);
   const totalPending = comments.reduce((n, c) => n + c.pending, 0);
-  const shownComments = comments.filter((c) => (commentFilter === 'pending' ? c.pending > 0 : true));
+  const shownComments = comments.filter((c) => (
+    commentFilter === 'pending' ? c.pending > 0
+      : commentFilter === 'hidden' ? c.state === 'hidden'
+        : true));
+  // Two distinct groups: Log-page threads vs Code-review threads (don't mingle them).
+  const logComments = shownComments.filter((c) => c.kind === 'log');
+  const codeComments = shownComments.filter((c) => c.kind !== 'log');
 
   return (
     <aside className="review-sidebar" data-wcc-ui>
@@ -76,20 +91,40 @@ export default function ReviewSidebar({ hunks, threads, onJump, onClose }) {
           {totalPending > 0 && <span className="rs-pending">{totalPending} pending</span>}
         </div>
         <div className="rs-filter">
-          {['all', 'pending'].map((f) => (
+          {['all', 'pending', 'hidden'].map((f) => (
             <button key={f} className={commentFilter === f ? 'active' : ''} onClick={() => setCommentFilter(f)}>{f}</button>
           ))}
         </div>
         {shownComments.length === 0 && <div className="rs-empty">No comments.</div>}
-        {shownComments.map((c) => (
-          <button key={c.key} className={`rs-item rs-comment ${c.domId ? '' : 'rs-nojump'}`}
-            disabled={!c.domId} onClick={() => c.domId && onJump(c.domId)} title={c.preview}>
-            <span className={`rs-kind rs-kind-${c.kind}`}>{c.label}</span>
-            <span className="rs-item-text">{c.preview}</span>
-            <span className="rs-counts">
-              {c.count}{c.pending > 0 && <span className="rs-pending-dot" title={`${c.pending} awaiting reply`}> ●</span>}
-            </span>
-          </button>
+        {[['Log threads', logComments], ['Code review threads', codeComments]].map(([label, rows]) => (
+          rows.length > 0 && (
+            <div key={label} className="rs-group">
+              <div className="rs-grouphead">{label} · {rows.length}</div>
+              {rows.map((c) => (
+                <div key={c.key} className={`rs-row ${c.state === 'hidden' ? 'rs-row-hidden' : ''}`}>
+                  <button className={`rs-item rs-comment ${c.domId ? '' : 'rs-nojump'}`}
+                    disabled={!c.domId} onClick={() => c.domId && onJump(c.domId)} title={c.preview}>
+                    <span className={`rs-kind rs-kind-${c.kind}`}>{c.label}</span>
+                    {c.state === 'hidden' && <span className="rs-tag-hidden" title="hidden on the page">hidden</span>}
+                    <span className="rs-item-text">{c.preview}</span>
+                    <span className="rs-counts">
+                      {c.count}{c.pending > 0 && <span className="rs-pending-dot" title={`${c.pending} awaiting reply`}> ●</span>}
+                    </span>
+                  </button>
+                  <span className="rs-row-acts">
+                    {c.kind === 'log' && c.state === 'hidden' && onSetAnchorState && (
+                      <button className="rs-act" title="Unhide — show again on the Log page" aria-label="Unhide"
+                        onClick={() => onSetAnchorState(c.key, 'open')}>↺</button>
+                    )}
+                    {((c.kind === 'log' && onDeleteAnchor) || (c.kind !== 'log' && onDeleteThread)) && (
+                      <button className="rs-act rs-act-danger" title="Delete thread" aria-label="Delete"
+                        onClick={() => removeRow(c)}>🗑</button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
         ))}
       </div>
     </aside>
@@ -98,7 +133,7 @@ export default function ReviewSidebar({ hunks, threads, onJump, onClose }) {
 
 // Map each non-empty thread to a sidebar row: a human label, a scroll target
 // (domId) when it lives in the diff, message count, and pending count.
-function buildComments(hunks, threads) {
+function buildComments(hunks, threads, anchors) {
   const hunkIds = new Set((hunks || []).map((h) => h.id));
   const annById = new Map();
   for (const h of hunks || []) for (const a of h.annotations || []) annById.set(a.id, { ...a, file: h.file });
@@ -116,7 +151,10 @@ function buildComments(hunks, threads) {
     else if (/#L\d+$/.test(key)) { const n = key.match(/#L(\d+)$/)[1]; label = `Line ${n}`; kind = 'line'; domId = `ln-${key}`; }
     else if (key.includes('::')) { label = key.split('::').pop(); kind = 'finding'; domId = null; } // finding thread, annotation no longer on the diff
     else if (/^log:/.test(key)) { label = 'Log page'; kind = 'log'; domId = null; } // lives on the Log tab
-    rows.push({ key, label, kind, domId, count: msgs.length, pending, preview });
+    // Anchor state (log threads only) so the view can flag/unhide a hidden comment
+    // rather than losing it — a hidden anchor still keeps its thread here.
+    const state = (anchors && anchors[key] && anchors[key].state) || 'open';
+    rows.push({ key, label, kind, domId, count: msgs.length, pending, preview, state });
   }
   // pending first, then by kind grouping order
   const order = { finding: 0, line: 1, hunk: 2, general: 3, log: 4, other: 5 };

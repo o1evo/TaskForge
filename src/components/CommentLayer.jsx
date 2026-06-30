@@ -16,9 +16,16 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
   const [showOrphans, setShowOrphans] = useState(false);
   const popRef = useRef(null);
 
-  // Recompute highlight rects after every render/poll and on resize.
+  // Recompute highlight rects on real changes (anchors/version) and on layout
+  // shifts (fonts/resize/reflow). All triggers COALESCE into a single rAF, and we
+  // bail out of setState when nothing moved — so a flurry of triggers (ResizeObserver
+  // + resize + settle) is one measurement pass and zero re-renders if rects are stable.
+  // (Chinook avoids this entirely by drawing markers inside an iframe; that's the real
+  // long-term fix — this just removes the per-trigger thrash without the rearchitecture.)
   useLayoutEffect(() => {
-    function recompute() {
+    let raf = 0;
+    function compute() {
+      raf = 0;
       const root = pageRef.current;
       if (!root) return;
       const pos = {};
@@ -30,24 +37,22 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
         const rects = rectsOf(root, loc);
         if (rects.length) pos[key] = rects; else orph.push(key);
       }
-      setPositions(pos);
-      setOrphans(orph);
+      setPositions((prev) => (samePositions(prev, pos) ? prev : pos));
+      setOrphans((prev) => (sameKeys(prev, orph) ? prev : orph));
     }
-    recompute();
-    // On a fresh load the first synchronous pass can run before text is laid out
-    // (and before web fonts apply), which drops highlights until the next poll.
-    // Re-run after a frame, after fonts settle, and after a short delay for reflow.
-    const raf = requestAnimationFrame(recompute);
-    const settle = setTimeout(recompute, 300);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(recompute).catch(() => {});
-    const ro = new ResizeObserver(recompute);
+    function schedule() { if (!raf) raf = requestAnimationFrame(compute); }
+    // First pass via rAF (after layout); re-schedule after fonts settle and on reflow.
+    schedule();
+    const settle = setTimeout(schedule, 300);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule).catch(() => {});
+    const ro = new ResizeObserver(schedule);
     if (pageRef.current) ro.observe(pageRef.current);
-    window.addEventListener('resize', recompute);
+    window.addEventListener('resize', schedule);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       clearTimeout(settle);
       ro.disconnect();
-      window.removeEventListener('resize', recompute);
+      window.removeEventListener('resize', schedule);
     };
   }, [pageRef, anchors, version]);
 
@@ -132,15 +137,15 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
             <span className="wcc-quote">“{truncate(openAnchor.quote, 80)}”</span>
             <div className="wcc-popover-actions">
               {openAnchor.state === 'resolved' ? (
-                <button onClick={() => onSetState(openKey, 'open')}>Reopen</button>
+                <button className="wcc-act" title="Reopen" aria-label="Reopen" onClick={() => onSetState(openKey, 'open')}>↺</button>
               ) : (
-                <button onClick={() => onSetState(openKey, 'resolved')}>Resolve</button>
+                <button className="wcc-act" title="Resolve" aria-label="Resolve" onClick={() => onSetState(openKey, 'resolved')}>✓</button>
               )}
-              <button onClick={() => { onSetState(openKey, 'hidden'); setOpenKey(null); }}>Hide</button>
+              <button className="wcc-act" title="Hide (stays in the threads view)" aria-label="Hide" onClick={() => { onSetState(openKey, 'hidden'); setOpenKey(null); }}>⊘</button>
               {onDeleteAnchor && (
-                <button onClick={() => { if (window.confirm('Delete this comment and its thread? This cannot be undone.')) { onDeleteAnchor(openKey); setOpenKey(null); } }}>Delete</button>
+                <button className="wcc-act wcc-act-danger" title="Delete comment + thread" aria-label="Delete" onClick={() => { if (window.confirm('Delete this comment and its thread? This cannot be undone.')) { onDeleteAnchor(openKey); setOpenKey(null); } }}>🗑</button>
               )}
-              <button onClick={() => setOpenKey(null)} aria-label="close">✕</button>
+              <button className="wcc-act" title="Close" aria-label="Close" onClick={() => setOpenKey(null)}>✕</button>
             </div>
           </div>
           <Thread
@@ -178,6 +183,22 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
     </div>
   );
 }
+
+// Cheap equality so a recompute that finds the same rects doesn't trigger a re-render.
+function samePositions(a, b) {
+  const ak = Object.keys(a), bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    const ra = a[k], rb = b[k];
+    if (!rb || ra.length !== rb.length) return false;
+    for (let i = 0; i < ra.length; i++) {
+      const p = ra[i], q = rb[i];
+      if (p.top !== q.top || p.left !== q.left || p.width !== q.width || p.height !== q.height) return false;
+    }
+  }
+  return true;
+}
+function sameKeys(a, b) { return a.length === b.length && a.every((x, i) => x === b[i]); }
 
 function clampLeft(left, pageRef) {
   const w = pageRef.current ? pageRef.current.clientWidth : 800;

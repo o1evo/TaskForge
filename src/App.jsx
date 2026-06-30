@@ -200,6 +200,7 @@ export default function App() {
 
       {activeView === 'review' && (
         <ReviewView review={review} byFile={byFile} threads={threads} hunks={hunks} onSend={send} onDelete={removeMessage} onDeleteThread={removeThread}
+          onDeleteAnchor={removeAnchor} onSetAnchorState={changeAnchorState}
           jumpTarget={pendingJump} onJumped={() => setPendingJump(null)} />
       )}
 
@@ -214,7 +215,7 @@ export default function App() {
   );
 }
 
-function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDeleteThread, jumpTarget, onJumped }) {
+function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDeleteThread, onDeleteAnchor, onSetAnchorState, jumpTarget, onJumped }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     try { return localStorage.getItem('wcc.reviewSidebar') !== 'closed'; } catch { return true; }
   });
@@ -248,7 +249,8 @@ function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDelete
 
   return (
     <div className={`review-layout ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      {sidebarOpen && <ReviewSidebar hunks={hunks} threads={threads} onJump={jumpTo} onClose={toggleSidebar} />}
+      {sidebarOpen && <ReviewSidebar hunks={hunks} threads={threads} anchors={review.anchors || {}} onJump={jumpTo} onClose={toggleSidebar}
+        onDeleteThread={onDeleteThread} onDeleteAnchor={onDeleteAnchor} onSetAnchorState={onSetAnchorState} />}
       <div className="review-main">
         {!sidebarOpen && (
           <button className="rs-toggle" onClick={toggleSidebar} title="show findings & comments index">
