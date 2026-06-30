@@ -40,6 +40,7 @@ Rules — the runtime is deliberately tiny, so follow these or it won't load:
 | `wcc.review` | `{ id, title, repo, base, head, createdAt }` from `thread.json` |
 | `wcc.hunks` | the diff hunks (same data the Code Review tab renders) |
 | `wcc.threads` | all chat threads, keyed by thread key (object) |
+| `wcc.theme` | the active color palette — `{ text, muted, border, panel, panel2, link, bg, ok, warn, danger, blocker, high, medium, low, note }`. **Use it for all colors** (see Styling) so the page follows the app's theme. |
 | `wcc.Thread` | **component** — an anchored chat (see below) |
 | `wcc.Markdown` | **component** — `<wcc.Markdown text="…" />` renders full Markdown (headings, lists, GFM tables, task lists, blockquotes, links, Prism-highlighted fenced code) |
 | `wcc.send(target, text)` | post a `role:"author"` message programmatically; returns a promise |
@@ -82,17 +83,23 @@ passage changes or disappears, that comment is flagged **outdated** (an "N outda
 than silently dropped. So when revising a section that has live comments, **preserve the quoted
 phrasing where you can**, or resolve the comment first.
 
-## Styling
+## Styling — use `wcc.theme`, don't hardcode hex
 
-The app theme is dark (GitHub-ish). Either use inline styles with hex, or the app's CSS variables
-so pages match the chrome:
+The app is themeable (navy / dark-neutral / light, switchable in the header). So **don't author a
+hardcoded color palette** — pull the active one from `wcc.theme` and the page follows the theme for
+free (and it's fewer tokens than writing a palette literal):
 
+```jsx
+function Page({ wcc }) {
+  const C = wcc.theme;   // { text, muted, border, panel, panel2, link, bg, ok, warn, danger, blocker, high, medium, low, note }
+  return <div style={{ color: C.text, border: `1px solid ${C.border}`, background: C.panel }}>…</div>;
+}
 ```
---text #c9d1d9   --muted #8b949e   --border #30363d   --panel #161b22   --panel-2 #1c2129
---blocker #f85149   --high #db6d28   --medium #d29922   --low #3fb950   --resolved #2ea043
-```
 
-e.g. `style={{ color: 'var(--muted)', border: '1px solid var(--border)' }}`.
+`ok`/`warn`/`danger` are the semantic accents (green / amber / red); `blocker|high|medium|low|note`
+are the severity colors. Equivalent CSS variables exist for non-JS spots
+(`var(--text)`, `var(--border)`, `var(--blocker)`, …) — but in JSX prefer `wcc.theme`.
+Never hardcode hex: it locks the page to one theme and looks wrong in the others.
 
 ## QA Plan — a markdown file, not JSX
 

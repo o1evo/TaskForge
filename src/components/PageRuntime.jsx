@@ -80,7 +80,7 @@ export default function PageRuntime({ source, wcc }) {
 
 // Builds the page API handed to every Page as the `wcc` prop. Rebuilt each
 // render from the latest polled data, so <wcc.Thread> always shows live messages.
-export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, onAnchorDelete, onNavigate }) {
+export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, onAnchorDelete, onNavigate, theme }) {
   const threads = data.threads || {};
   const hunks = data.hunks || [];
 
@@ -164,6 +164,7 @@ export function buildWcc({ id, data, onSend, onDelete, onAnchor, onAnchorState, 
     hunks,
     threads,
     Thread: PageThread,
+    theme: theme || {}, // active color palette — pages do `const C = wcc.theme` and theme for free
     Markdown, // <wcc.Markdown text="# full markdown\n- lists, tables, ```fences``` " />
     CodeRef,        // <wcc.CodeRef file="app/x.rb" line={50} /> — link to the Code Review tab
     openCode,       // wcc.openCode(file, line) → jump to Code Review; returns false if not in diff

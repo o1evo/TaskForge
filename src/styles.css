@@ -47,6 +47,7 @@ code, pre, .code, .diff td.code, .review-meta code {
 }
 .poll-dot { color: var(--low); font-size: 12px; }
 .header-pending { color: var(--medium); font-size: 12px; }
+.theme-pick { font-size: 12px; padding: 3px 6px; }
 
 /* ── header task buttons ────────────────────────────────────────────────── */
 .task-switch-wrap { display: inline-flex; align-items: center; gap: 4px; }
