@@ -80,6 +80,8 @@ try {
   ok(rendered.includes('Wire the bar widget'), 'PLAN.md rendered as a task card (task name in output)');
   ok(rendered.includes('FOO-01'), 'plan requirement chips rendered');
   ok(rendered.includes('PASS') && rendered.includes('PENDING'), 'UAT rendered as a QA grid with result cells');
+  ok(rendered.includes('Requirement traceability'), 'requirement-traceability grid rendered');
+  ok(rendered.includes('no UAT'), 'a declared-but-unverified requirement (FOO-02) is flagged "no UAT"');
 
   const qa = readFileSync(join(WORK, 'qa-plan.md'), 'utf8');
   ok(qa.includes('Bar renders for a fresh tenant'), 'QA plan seeded from latest phase UAT');

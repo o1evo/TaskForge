@@ -22,7 +22,8 @@ npm run import-gsd -- --planning <path/to/.planning-or-project-root> [--workstre
   --id <id> [--title "..."] [--repo <code-repo> --base <ref> --head <ref>]
 ```
 
-- Produces `work/<id>/Page.jsx` (Log tab: milestone, % progress, **per-phase cards**), `qa-plan.md`
+- Produces `work/<id>/Page.jsx` (Log tab: milestone, % progress, **per-phase cards**, a
+  **requirement-traceability grid** — REQ-ID → phases + UAT coverage), `qa-plan.md`
   (QA tab, seeded from the latest phase UAT), and `thread.json` (Code Review tab; pass
   `--repo/--base/--head` to populate the diff — `--head WORKTREE` for uncommitted work).
 - **Workstream mode** (STATE/ROADMAP under `.planning/workstreams/<name>/`): `--workstream` is

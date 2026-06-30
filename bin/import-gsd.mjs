@@ -268,6 +268,30 @@ function collectCodebase(planningRoot) {
     .filter((d) => d.text);
 }
 
+// Requirement traceability: REQ-ID → which phases declare it (PLAN.md frontmatter
+// `requirements:`) and which phases' UAT reference it. Surfaces unverified requirements
+// (declared in a plan, never named in any UAT) at a glance.
+function buildTraceability(phases) {
+  const reqs = {}; // id → { phases:Set, uat:Set }
+  const uatDocs = []; // { phase, text }
+  for (const ph of phases) {
+    for (const doc of ph.docs || []) {
+      if (doc.kind === 'plan' && doc.plan) {
+        for (const id of doc.plan.requirements || []) (reqs[id] ||= { phases: new Set(), uat: new Set() }).phases.add(ph.name);
+      }
+      if (/UAT\.MD$/i.test(doc.name) && doc.text) uatDocs.push({ phase: ph.name, text: doc.text });
+    }
+  }
+  for (const id of Object.keys(reqs)) {
+    // Word-boundary match so REQ-1 doesn't also match REQ-10.
+    const re = new RegExp('(^|[^A-Za-z0-9-])' + id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z0-9-]|$)');
+    for (const u of uatDocs) if (re.test(u.text)) reqs[id].uat.add(u.phase);
+  }
+  return Object.keys(reqs).sort().map((id) => ({
+    id, phases: [...reqs[id].phases].sort(), uat: [...reqs[id].uat].sort(),
+  }));
+}
+
 // Find the most recent phase UAT file to seed the QA Plan tab.
 function latestUat(planningRoot) {
   const phasesDir = join(planningRoot, 'phases');
@@ -395,6 +419,36 @@ function Page({ wcc }) {
               </div>
             ))}
           </div>
+        </Section>
+      )}
+
+      {GSD.traceability && GSD.traceability.length > 0 && (
+        <Section title={\`Requirement traceability (\${GSD.traceability.length})\`} defaultOpen>
+          <p style={{ marginTop: 0, color: C.muted, fontSize: 13 }}>
+            Each requirement (from a phase PLAN's <code>requirements:</code>) → the phases that
+            implement it and the phases whose UAT names it. A requirement with <strong>no UAT</strong>
+            is declared but unverified.
+          </p>
+          <table style={tbl}>
+            <thead><tr>{['requirement', 'phases', 'UAT'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {GSD.traceability.map((r) => (
+                <tr key={r.id}>
+                  <td style={td}><code style={{ color: C.link }}>{r.id}</code></td>
+                  <td style={td}>
+                    <Row style={{ flexWrap: 'wrap', gap: 4 }}>
+                      {r.phases.map((p) => <span key={p} style={{ ...tag, color: C.muted, borderColor: C.border, textTransform: 'none' }}>{p}</span>)}
+                    </Row>
+                  </td>
+                  <td style={td}>
+                    {r.uat.length > 0
+                      ? <span style={{ color: C.ok, fontWeight: 600 }}>✓ {r.uat.join(', ')}</span>
+                      : <span style={{ color: C.warn }}>— no UAT</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Section>
       )}
 
@@ -598,6 +652,7 @@ function main() {
     progress: fm.progress || {},
     resume: null,
     phases,
+    traceability: buildTraceability(phases),
     codebase,
     state: stateBody ? stateBody.trim() : null,
     roadmap: roadmap ? roadmap.trim() : null,
