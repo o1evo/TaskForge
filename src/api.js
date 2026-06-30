@@ -6,6 +6,17 @@ export async function listReviews() {
   return r.json();
 }
 
+// Update a page's UI metadata (name / hidden / starred / project) in .wcc/pages.json.
+export async function setPageMeta(id, patch) {
+  const r = await fetch('/api/page-meta', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, patch }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to update page metadata');
+  return r.json();
+}
+
 export async function getReview(id) {
   const r = await fetch(`/api/review/${encodeURIComponent(id)}`);
   if (r.status === 404) return null;
