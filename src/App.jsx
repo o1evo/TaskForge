@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor, setPageMeta } from './api.js';
 import HunkView from './components/HunkView.jsx';
-import PageSwitcher from './components/PageSwitcher.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
+import TasksManager from './components/TasksManager.jsx';
 import ReviewSidebar from './components/ReviewSidebar.jsx';
 import Thread from './components/Thread.jsx';
 import PageRuntime, { buildWcc } from './components/PageRuntime.jsx';
@@ -18,6 +19,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [view, setView] = useState(null); // null → default per task (Log if it has a page)
   const [pendingJump, setPendingJump] = useState(null); // DOM id to scroll to after a tab switch
+  const [paletteOpen, setPaletteOpen] = useState(false); // ⌘K task switcher
+  const [manageOpen, setManageOpen] = useState(false); // "manage tasks" modal
   const mtimeRef = useRef(null);
 
   // Cross-tab navigation handed to the Log page via wcc.onNavigate: switch tabs
@@ -26,6 +29,18 @@ export default function App() {
     setView(targetView || 'review');
     if (domId) setPendingJump(domId);
   }
+
+  // ⌘K / Ctrl+K toggles the task-switcher palette from anywhere.
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   // Load the list of reviews once. Restore the most-recently-selected task
   // for this client (localStorage is per-browser), falling back to the first.
@@ -140,13 +155,14 @@ export default function App() {
   const totalPending = countPending(threads);
   const hasPage = !!data._page;
   const activeView = view || (hasPage ? 'log' : 'review');
+  const curMeta = reviews.find((r) => r.id === currentId) || {};
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-left">
           <div className="brand">Work Command Center</div>
-          <h1>{(reviews.find((r) => r.id === currentId) || {}).name || review.title}</h1>
+          <h1>{curMeta.name || review.title}</h1>
           <div className="review-meta">
             <code>{review.base} → {review.head}</code>
             {review.repo && <span className="repo">{review.repo}</span>}
@@ -154,7 +170,14 @@ export default function App() {
         </div>
         <div className="header-right">
           {reviews.length > 0 && (
-            <PageSwitcher reviews={reviews} currentId={currentId} onSelect={selectReview} onMeta={updatePageMeta} />
+            <div className="task-switch-wrap">
+              <button className="task-switch" onClick={() => setPaletteOpen(true)} title="Switch task (⌘K)">
+                {curMeta.starred && <span className="task-switch-star">★</span>}
+                <span className="task-switch-name">{curMeta.name || review.title}</span>
+                <kbd className="task-switch-kbd">⌘K</kbd>
+              </button>
+              <button className="task-manage-btn" onClick={() => setManageOpen(true)} title="Manage tasks">⚙</button>
+            </div>
           )}
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
@@ -217,6 +240,15 @@ export default function App() {
         Log page <code>Page.jsx</code> · review <code>thread.json</code> ·
         protocol in <code>CLAUDE.md</code>
       </footer>
+
+      {paletteOpen && (
+        <CommandPalette reviews={reviews} currentId={currentId} onSelect={selectReview}
+          onClose={() => setPaletteOpen(false)} onManage={() => setManageOpen(true)} />
+      )}
+      {manageOpen && (
+        <TasksManager reviews={reviews} currentId={currentId} onSelect={selectReview}
+          onMeta={updatePageMeta} onClose={() => setManageOpen(false)} />
+      )}
     </div>
   );
 }
