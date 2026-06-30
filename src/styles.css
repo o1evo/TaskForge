@@ -304,6 +304,14 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
   border-radius: 5px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
 .wcc-popover-actions button:hover { color: var(--text); border-color: var(--muted); }
+/* icon action buttons: square, glyph-centered, with a quick hover (less janky than text) */
+.wcc-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 22px; padding: 0 !important; font-size: 13px; line-height: 1;
+  transition: color .08s ease, border-color .08s ease, background .08s ease;
+}
+.wcc-act:hover { background: var(--panel2, rgba(255,255,255,.04)); }
+.wcc-act-danger:hover { color: var(--blocker, #f85149); border-color: var(--blocker, #f85149); }
 
 .wcc-orphans { position: absolute; top: -8px; right: 0; pointer-events: auto; z-index: 7; }
 .wcc-orphans-chip {
@@ -422,6 +430,21 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 }
 .rs-item:hover { background: var(--panel-2); }
 .rs-item:disabled, .rs-item.rs-nojump { cursor: default; opacity: .65; }
+/* a thread row = the jump button + hover-revealed actions (delete / unhide) */
+.rs-row { display: flex; align-items: center; gap: 2px; }
+.rs-row .rs-item { flex: 1 1 auto; width: auto; min-width: 0; }
+.rs-row-hidden .rs-item { opacity: .55; }
+.rs-row-acts { display: flex; gap: 2px; flex: 0 0 auto; opacity: 0; transition: opacity .08s ease; }
+.rs-row:hover .rs-row-acts, .rs-row-hidden .rs-row-acts { opacity: 1; }
+.rs-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 20px; padding: 0; font-size: 12px; line-height: 1;
+  background: transparent; border: 1px solid transparent; border-radius: 5px;
+  color: var(--muted); cursor: pointer;
+}
+.rs-act:hover { color: var(--text); border-color: var(--border); background: var(--panel-2); }
+.rs-act-danger:hover { color: var(--blocker, #f85149); border-color: var(--blocker, #f85149); }
+.rs-tag-hidden { flex: 0 0 auto; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 .rs-item.rs-nojump:hover { background: none; }
 .rs-item-text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rs-item-file { flex: 0 0 auto; color: var(--muted); font-size: 11px; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

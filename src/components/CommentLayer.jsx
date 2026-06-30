@@ -12,13 +12,21 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
   const [positions, setPositions] = useState({}); // key -> rects[]
   const [orphans, setOrphans] = useState([]); // keys whose quote no longer resolves
   const [pending, setPending] = useState(null); // { quote, prefix, suffix, rect }
+  const [draft, setDraft] = useState(null); // an in-memory anchor not yet persisted (no thread until first send)
   const [openKey, setOpenKey] = useState(null);
   const [showOrphans, setShowOrphans] = useState(false);
   const popRef = useRef(null);
 
-  // Recompute highlight rects after every render/poll and on resize.
+  // Recompute highlight rects on real changes (anchors/version) and on layout
+  // shifts (fonts/resize/reflow). All triggers COALESCE into a single rAF, and we
+  // bail out of setState when nothing moved — so a flurry of triggers (ResizeObserver
+  // + resize + settle) is one measurement pass and zero re-renders if rects are stable.
+  // (Chinook avoids this entirely by drawing markers inside an iframe; that's the real
+  // long-term fix — this just removes the per-trigger thrash without the rearchitecture.)
   useLayoutEffect(() => {
-    function recompute() {
+    let raf = 0;
+    function compute() {
+      raf = 0;
       const root = pageRef.current;
       if (!root) return;
       const pos = {};
@@ -30,24 +38,22 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
         const rects = rectsOf(root, loc);
         if (rects.length) pos[key] = rects; else orph.push(key);
       }
-      setPositions(pos);
-      setOrphans(orph);
+      setPositions((prev) => (samePositions(prev, pos) ? prev : pos));
+      setOrphans((prev) => (sameKeys(prev, orph) ? prev : orph));
     }
-    recompute();
-    // On a fresh load the first synchronous pass can run before text is laid out
-    // (and before web fonts apply), which drops highlights until the next poll.
-    // Re-run after a frame, after fonts settle, and after a short delay for reflow.
-    const raf = requestAnimationFrame(recompute);
-    const settle = setTimeout(recompute, 300);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(recompute).catch(() => {});
-    const ro = new ResizeObserver(recompute);
+    function schedule() { if (!raf) raf = requestAnimationFrame(compute); }
+    // First pass via rAF (after layout); re-schedule after fonts settle and on reflow.
+    schedule();
+    const settle = setTimeout(schedule, 300);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule).catch(() => {});
+    const ro = new ResizeObserver(schedule);
     if (pageRef.current) ro.observe(pageRef.current);
-    window.addEventListener('resize', recompute);
+    window.addEventListener('resize', schedule);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
       clearTimeout(settle);
       ro.disconnect();
-      window.removeEventListener('resize', recompute);
+      window.removeEventListener('resize', schedule);
     };
   }, [pageRef, anchors, version]);
 
@@ -64,27 +70,39 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
     return () => document.removeEventListener('mouseup', onMouseUp);
   }, [pageRef]);
 
-  // Close the popover on outside click / Escape.
+  // Close the popover (or discard an untyped draft) on outside click / Escape.
   useEffect(() => {
-    if (!openKey) return;
+    if (!openKey && !draft) return;
+    function close() { setOpenKey(null); setDraft(null); }
     function onDown(e) {
       if (e.target.closest && e.target.closest('[data-wcc-ui]')) return;
-      setOpenKey(null);
+      close();
     }
-    function onKey(e) { if (e.key === 'Escape') setOpenKey(null); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [openKey]);
+  }, [openKey, draft]);
 
-  async function createFromPending() {
+  // "Comment" opens an in-memory DRAFT composer — it does NOT persist an anchor yet,
+  // so cancelling without typing leaves nothing behind (no empty thread / stray highlight).
+  function startDraft() {
     if (!pending) return;
-    const key = freshKey();
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
+    setDraft({ key: freshKey(), quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix, start: pending.start, end: pending.end, rect: pending.rect });
     setPending(null);
-    await onCreate({ key, quote: pending.quote, prefix: pending.prefix, suffix: pending.suffix, start: pending.start, end: pending.end });
-    setOpenKey(key); // open the composer; highlight appears on the next recompute
+  }
+
+  // First send is what actually creates the comment: persist the anchor, post the
+  // message, then promote the draft to a normal open anchor.
+  async function sendDraft(text) {
+    const d = draft;
+    if (!d) return;
+    await onCreate({ key: d.key, quote: d.quote, prefix: d.prefix, suffix: d.suffix, start: d.start, end: d.end });
+    await onSend(d.key, text);
+    setDraft(null);
+    setOpenKey(d.key); // highlight appears on the next recompute
   }
 
   const openAnchor = openKey ? (anchors || {})[openKey] : null;
@@ -110,15 +128,36 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
       })}
 
       {/* floating Comment button on a fresh selection */}
-      {pending && !openKey && (
+      {pending && !openKey && !draft && (
         <button
           className="wcc-comment-btn"
           style={{ top: Math.max(0, pending.rect.top - 34), left: pending.rect.left }}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={createFromPending}
+          onClick={startDraft}
         >
           💬 Comment
         </button>
+      )}
+
+      {/* draft: a not-yet-persisted comment — highlight + composer; nothing is saved
+          until the first message is sent (cancel/✕ leaves no anchor or empty thread) */}
+      {draft && draft.rect && (
+        <div className="wcc-hl active" style={{ top: draft.rect.top, left: draft.rect.left, width: draft.rect.width, height: draft.rect.height }} />
+      )}
+      {draft && (
+        <div
+          ref={popRef}
+          className="wcc-popover"
+          style={{ top: draft.rect.top + draft.rect.height + 6, left: clampLeft(draft.rect.left, pageRef) }}
+        >
+          <div className="wcc-popover-head">
+            <span className="wcc-quote">“{truncate(draft.quote, 80)}”</span>
+            <div className="wcc-popover-actions">
+              <button className="wcc-act" title="Cancel" aria-label="Cancel" onClick={() => setDraft(null)}>✕</button>
+            </div>
+          </div>
+          <Thread messages={[]} onSend={sendDraft} compact />
+        </div>
       )}
 
       {/* the thread popover */}
@@ -132,15 +171,15 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
             <span className="wcc-quote">“{truncate(openAnchor.quote, 80)}”</span>
             <div className="wcc-popover-actions">
               {openAnchor.state === 'resolved' ? (
-                <button onClick={() => onSetState(openKey, 'open')}>Reopen</button>
+                <button className="wcc-act" title="Reopen" aria-label="Reopen" onClick={() => onSetState(openKey, 'open')}>↺</button>
               ) : (
-                <button onClick={() => onSetState(openKey, 'resolved')}>Resolve</button>
+                <button className="wcc-act" title="Resolve" aria-label="Resolve" onClick={() => onSetState(openKey, 'resolved')}>✓</button>
               )}
-              <button onClick={() => { onSetState(openKey, 'hidden'); setOpenKey(null); }}>Hide</button>
+              <button className="wcc-act" title="Hide (stays in the threads view)" aria-label="Hide" onClick={() => { onSetState(openKey, 'hidden'); setOpenKey(null); }}>⊘</button>
               {onDeleteAnchor && (
-                <button onClick={() => { if (window.confirm('Delete this comment and its thread? This cannot be undone.')) { onDeleteAnchor(openKey); setOpenKey(null); } }}>Delete</button>
+                <button className="wcc-act wcc-act-danger" title="Delete comment + thread" aria-label="Delete" onClick={() => { if (window.confirm('Delete this comment and its thread? This cannot be undone.')) { onDeleteAnchor(openKey); setOpenKey(null); } }}>🗑</button>
               )}
-              <button onClick={() => setOpenKey(null)} aria-label="close">✕</button>
+              <button className="wcc-act" title="Close" aria-label="Close" onClick={() => setOpenKey(null)}>✕</button>
             </div>
           </div>
           <Thread
@@ -178,6 +217,22 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
     </div>
   );
 }
+
+// Cheap equality so a recompute that finds the same rects doesn't trigger a re-render.
+function samePositions(a, b) {
+  const ak = Object.keys(a), bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    const ra = a[k], rb = b[k];
+    if (!rb || ra.length !== rb.length) return false;
+    for (let i = 0; i < ra.length; i++) {
+      const p = ra[i], q = rb[i];
+      if (p.top !== q.top || p.left !== q.left || p.width !== q.width || p.height !== q.height) return false;
+    }
+  }
+  return true;
+}
+function sameKeys(a, b) { return a.length === b.length && a.every((x, i) => x === b[i]); }
 
 function clampLeft(left, pageRef) {
   const w = pageRef.current ? pageRef.current.clientWidth : 800;
