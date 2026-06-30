@@ -177,7 +177,7 @@ function runningHtml(url) {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; frame-src ${url}; style-src 'unsafe-inline';">
+  content="default-src 'none'; frame-src ${url}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>
   html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:#1e1e1e; }
   iframe { border:0; width:100%; height:100%; display:block; }
@@ -187,6 +187,18 @@ function runningHtml(url) {
     allow="clipboard-read ${url}; clipboard-write ${url}"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads">
   </iframe>
+  <script>
+    // Clipboard bridge: the embedded app can't write the clipboard from inside a
+    // cross-origin iframe, so it postMessages the selected text up here and we
+    // relay it to the extension host (vscode.env.clipboard), which always can.
+    const vscode = acquireVsCodeApi();
+    window.addEventListener('message', (e) => {
+      const m = e.data;
+      if (m && m.type === 'wcc-clipboard-write' && typeof m.text === 'string') {
+        vscode.postMessage({ type: 'clipboard-write', text: m.text });
+      }
+    });
+  </script>
 </body></html>`;
 }
 
@@ -241,6 +253,9 @@ function attach(webview) {
       try { await render(true); await startServer(); }
       catch (e) { vscode.window.showErrorMessage(`WCC: ${e.message}`); }
       await render(false);
+    } else if (msg && msg.type === 'clipboard-write' && typeof msg.text === 'string') {
+      // ⌘C relayed up from the embedded app — the extension host can always write.
+      try { await vscode.env.clipboard.writeText(msg.text); } catch { /* best effort */ }
     }
   });
 }
