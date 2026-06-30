@@ -48,6 +48,62 @@ code, pre, .code, .diff td.code, .review-meta code {
 .poll-dot { color: var(--low); font-size: 12px; }
 .header-pending { color: var(--medium); font-size: 12px; }
 
+/* ── task switcher (PageSwitcher) ───────────────────────────────────────── */
+.pswitch { position: relative; }
+.pswitch-btn {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 320px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; cursor: pointer; font: inherit;
+}
+.pswitch-btn:hover { border-color: var(--muted); }
+.pswitch-star { color: #d9a521; }
+.pswitch-cur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pswitch-caret { color: var(--muted); font-size: 10px; }
+.pswitch-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+  width: 360px; max-height: 70vh; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.45); overflow: hidden;
+}
+.pswitch-filter {
+  margin: 8px; padding: 5px 8px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; font: inherit;
+}
+.pswitch-list { overflow-y: auto; padding: 0 4px 4px; }
+.pswitch-empty { color: var(--muted); padding: 10px; text-align: center; font-size: 13px; }
+.pswitch-group { margin-bottom: 4px; }
+.pswitch-grouphead {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  padding: 6px 8px 2px;
+}
+.pswitch-row { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.pswitch-row:hover { background: var(--panel-2); }
+.pswitch-row.active { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--link); }
+.pswitch-row.is-hidden .pswitch-label { opacity: .55; }
+.pswitch-name {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;
+  background: none; border: none; color: var(--text); text-align: left;
+  padding: 6px 8px; cursor: pointer; font: inherit;
+}
+.pswitch-rowstar { color: #d9a521; flex: 0 0 auto; font-size: 11px; }
+.pswitch-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pswitch-id { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.pswitch-acts { display: flex; gap: 1px; flex: 0 0 auto; opacity: 0; transition: opacity .08s ease; padding-right: 4px; }
+.pswitch-row:hover .pswitch-acts { opacity: 1; }
+.ps-act {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 20px; padding: 0; font-size: 12px; line-height: 1;
+  background: transparent; border: 1px solid transparent; border-radius: 5px;
+  color: var(--muted); cursor: pointer;
+}
+.ps-act:hover { color: var(--text); border-color: var(--border); background: var(--panel); }
+.ps-act.on { color: #d9a521; }
+.pswitch-showhidden {
+  border-top: 1px solid var(--border); background: none; color: var(--muted);
+  padding: 7px; cursor: pointer; font: inherit; font-size: 12px;
+}
+.pswitch-showhidden:hover { color: var(--text); background: var(--panel-2); }
+
 h2 { font-size: 15px; margin: 24px 0 10px; }
 .file-name {
   font-family: ui-monospace, monospace; font-size: 13px; color: var(--link);

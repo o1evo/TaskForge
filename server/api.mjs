@@ -10,6 +10,7 @@ import {
   existsSync,
   statSync,
   readdirSync,
+  mkdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { ensureAnnotationIds, annotationIds } from './annotations.mjs';
@@ -127,18 +128,39 @@ export function createApi(workDir) {
     renameSync(tmp, p);
   }
 
+  // Per-page UI metadata (display name override, hidden, starred, project) lives in
+  // a single WCC-owned, gitignored file — NOT in thread.json (which is the proprietary
+  // review data). Keyed by review id. Absent file → no metadata, everything default.
+  const metaPath = join(workDir, '..', '.wcc', 'pages.json');
+  const META_FIELDS = ['name', 'hidden', 'starred', 'project'];
+  function loadMeta() {
+    try { return JSON.parse(readFileSync(metaPath, 'utf8')).pages || {}; } catch { return {}; }
+  }
+  function saveMeta(pages) {
+    try { mkdirSync(join(workDir, '..', '.wcc'), { recursive: true }); } catch { /* exists */ }
+    const tmp = `${metaPath}.tmp.${process.pid}`;
+    writeFileSync(tmp, JSON.stringify({ pages }, null, 2) + '\n');
+    renameSync(tmp, metaPath);
+  }
+
   function listReviews() {
     if (!existsSync(workDir)) return [];
+    const meta = loadMeta();
     return readdirSync(workDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
       .filter((name) => existsSync(join(workDir, name, 'thread.json')))
       .map((name) => {
         const data = load(name);
+        const m = meta[name] || {};
         return {
           id: name,
           title: data?.review?.title || name,
           hasPage: !!data?._page, // does this task have a bespoke Log page yet?
+          name: m.name || null,    // display-name override (falls back to title in the UI)
+          hidden: !!m.hidden,
+          starred: !!m.starred,
+          project: m.project || null,
         };
       });
   }
@@ -160,6 +182,27 @@ export function createApi(workDir) {
       // GET /api/reviews — list available reviews
       if (path === '/api/reviews' && req.method === 'GET') {
         return json(res, 200, listReviews());
+      }
+
+      // POST /api/page-meta { id, patch: { name?, hidden?, starred?, project? } }
+      // Update a page's UI metadata in .wcc/pages.json. Falsy/empty values clear the
+      // field (and an emptied page is dropped) so the file stays lean.
+      if (path === '/api/page-meta' && req.method === 'POST') {
+        const body = await readBody(req);
+        const id = String(body.id || '');
+        if (!/^[a-z0-9-]+$/i.test(id)) return json(res, 400, { error: 'bad id' });
+        const patch = body.patch || {};
+        const pages = loadMeta();
+        const cur = { ...(pages[id] || {}) };
+        for (const k of META_FIELDS) {
+          if (!(k in patch)) continue;
+          const v = patch[k];
+          if (v === null || v === '' || v === false) delete cur[k];
+          else cur[k] = v;
+        }
+        if (Object.keys(cur).length) pages[id] = cur; else delete pages[id];
+        saveMeta(pages);
+        return json(res, 200, { id, meta: pages[id] || {} });
       }
 
       // GET /api/review/:id

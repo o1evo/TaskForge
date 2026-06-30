@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor } from './api.js';
+import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor, setPageMeta } from './api.js';
 import HunkView from './components/HunkView.jsx';
+import PageSwitcher from './components/PageSwitcher.jsx';
 import ReviewSidebar from './components/ReviewSidebar.jsx';
 import Thread from './components/Thread.jsx';
 import PageRuntime, { buildWcc } from './components/PageRuntime.jsx';
@@ -43,6 +44,16 @@ export default function App() {
   }, []);
 
   // Switch tasks and remember the choice for this client.
+  // Re-fetch the reviews list (e.g. after a metadata change) so star/hide/name/project
+  // changes show immediately without a full reload.
+  async function refreshReviews() {
+    try { setReviews(await listReviews()); } catch { /* keep the stale list */ }
+  }
+  async function updatePageMeta(id, p) {
+    await setPageMeta(id, p);
+    await refreshReviews();
+  }
+
   function selectReview(id) {
     setCurrentId(id);
     try { localStorage.setItem(CURRENT_KEY, id); } catch {}
@@ -135,19 +146,15 @@ export default function App() {
       <header className="app-header">
         <div className="header-left">
           <div className="brand">Work Command Center</div>
-          <h1>{review.title}</h1>
+          <h1>{(reviews.find((r) => r.id === currentId) || {}).name || review.title}</h1>
           <div className="review-meta">
             <code>{review.base} → {review.head}</code>
             {review.repo && <span className="repo">{review.repo}</span>}
           </div>
         </div>
         <div className="header-right">
-          {reviews.length > 1 && (
-            <select value={currentId} onChange={(e) => selectReview(e.target.value)}>
-              {reviews.map((r) => (
-                <option key={r.id} value={r.id}>{r.title}</option>
-              ))}
-            </select>
+          {reviews.length > 0 && (
+            <PageSwitcher reviews={reviews} currentId={currentId} onSelect={selectReview} onMeta={updatePageMeta} />
           )}
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
