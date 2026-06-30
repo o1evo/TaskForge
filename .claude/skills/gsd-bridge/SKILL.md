@@ -25,9 +25,13 @@ npm run import-gsd -- --planning <path/to/.planning-or-project-root> [--workstre
 - Produces `work/<id>/Page.jsx` (Log tab: milestone, % progress, **per-phase cards**), `qa-plan.md`
   (QA tab, seeded from the latest phase UAT), and `thread.json` (Code Review tab; pass
   `--repo/--base/--head` to populate the diff — `--head WORKTREE` for uncommitted work).
+- **Workstream mode** (STATE/ROADMAP under `.planning/workstreams/<name>/`): `--workstream` is
+  **optional** — it auto-detects via the gitignored `.planning/active-workstream` pointer or a sole
+  workstream; pass the flag only to disambiguate when several exist. The page header shows the
+  active workstream.
 - **Re-run any time to refresh** — it preserves the conversation + comment anchors (like
   `import.mjs --refresh`). The Code Review diff streams live on the 3s poll; the Log tab refreshes
-  on re-import.
+  on re-import; the header carries an *imported-at* stamp so staleness is visible.
 - **Diagram:** if `work/<id>/architecture.svg` exists, it's auto-embedded in an Architecture
   section (survives re-imports, no view-time network).
 

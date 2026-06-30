@@ -4,7 +4,7 @@
 // contract, and exits non-zero on any failure. Run with `npm run test:gsd`.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, cpSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = join(ROOT, 'test/fixtures/gsd-planning/.planning');
 const ID = 'gsd-smoketest';
 const WORK = join(ROOT, 'work', ID);
+const WS_ID = 'gsd-smoketest-ws';
+const WS_WORK = join(ROOT, 'work', WS_ID);
 
 let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? '  ✓' : '  ✗'} ${msg}`); if (!cond) failures++; };
@@ -111,6 +113,19 @@ try {
   ok(readFileSync(join(sandbox, '.planning', 'STATE.md'), 'utf8') === readFileSync(join(FIXTURE, 'STATE.md'), 'utf8'),
      'capture leaves GSD-reconstructed STATE.md byte-identical');
 
+  // ── workstream auto-detect: STATE lives under workstreams/<name>/, no --workstream flag ──
+  console.log('workstream mode:');
+  const wsPlan = join(sandbox, 'wsproj', '.planning');
+  mkdirSync(join(wsPlan, 'workstreams', 'alpha', 'phases', '01-init'), { recursive: true });
+  writeFileSync(join(wsPlan, 'workstreams', 'alpha', 'STATE.md'),
+    '---\nmilestone: v1\nmilestone_name: Alpha Stream\nstatus: active\n---\n# State\n');
+  writeFileSync(join(wsPlan, 'active-workstream'), 'alpha\n');
+  node('import-gsd.mjs', ['--planning', wsPlan, '--id', WS_ID]);
+  const wsPage = readFileSync(join(WS_WORK, 'Page.jsx'), 'utf8');
+  ok(/"workstream":\s*"alpha"/.test(wsPage), 'workstream auto-detected via active-workstream (no --workstream flag)');
+  ok(/Alpha Stream/.test(wsPage), 'auto-detected workstream STATE.md parsed (milestone_name)');
+  ok(/"importedAt":/.test(wsPage), 'page carries an importedAt staleness stamp');
+
   // Idempotency: a second run captures nothing new.
   const before = caps.length;
   node('capture-gsd.mjs', ['--id', ID, '--planning', join(sandbox, '.planning')]);
@@ -118,6 +133,7 @@ try {
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
   rmSync(WORK, { recursive: true, force: true });
+  rmSync(WS_WORK, { recursive: true, force: true });
 }
 
 console.log(failures ? `\nFAIL — ${failures} assertion(s) failed` : '\nPASS — all assertions green');

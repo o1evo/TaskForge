@@ -16,8 +16,9 @@
 //        --id <id> [--title "..."] [--repo <path> --base <ref> --head <ref>]
 //
 //   --planning   path to a `.planning` dir (or a project root containing one)
-//   --workstream pick `.planning/workstreams/<name>` instead of the top level
-//                (GSD multi-workstream projects keep STATE/ROADMAP per workstream)
+//   --workstream pick `.planning/workstreams/<name>` instead of the top level. OPTIONAL —
+//                in workstream mode it auto-detects (active-workstream pointer, or a sole
+//                workstream); only needed to disambiguate when several exist
 //   --repo/--base/--head  optional: populate the Code Review tab from a git diff
 //                (re-uses the same live-diff machinery as bin/import.mjs)
 //
@@ -52,18 +53,30 @@ function nowIso() { return new Date().toISOString(); }
 function read(p) { try { return readFileSync(p, 'utf8'); } catch { return null; } }
 
 // ── Resolve the planning root ────────────────────────────────────────────────
-// Accept either a `.planning` dir directly or a project root that contains one,
-// then optionally descend into a named workstream.
+// Accept either a `.planning` dir directly or a project root that contains one.
+// WORKSTREAM mode: when STATE/ROADMAP live under .planning/workstreams/<name>/, pick
+// the workstream — an explicit --workstream wins; else AUTO-DETECT via the gitignored
+// `.planning/active-workstream` pointer, or a sole workstream; else fail with a clear
+// message listing the choices (don't silently import an empty top-level root).
 function resolvePlanningRoot(args) {
   let p = resolve(args.planning === true ? '.planning' : args.planning || '.planning');
   if (!existsSync(p)) die(`no such path: ${p}`);
   if (statSync(p).isDirectory() && basename(p) !== '.planning' && existsSync(join(p, '.planning'))) {
     p = join(p, '.planning');
   }
-  if (args.workstream) {
-    const ws = join(p, 'workstreams', args.workstream);
-    if (!existsSync(ws)) die(`no workstream "${args.workstream}" under ${join(p, 'workstreams')}`);
-    return ws;
+  const wsDir = join(p, 'workstreams');
+  let ws = args.workstream === true ? null : args.workstream; // bare --workstream → auto-detect
+  if (!ws && existsSync(wsDir)) {
+    const names = readdirSync(wsDir).filter((d) => { try { return statSync(join(wsDir, d)).isDirectory(); } catch { return false; } });
+    const active = (read(join(p, 'active-workstream')) || '').trim(); // gitignored, branch-local pointer GSD writes
+    if (active && names.includes(active)) ws = active;
+    else if (names.length === 1) ws = names[0];
+    else if (names.length > 1) die(`workstream mode: ${names.length} workstreams (${names.join(', ')}) and no --workstream / active-workstream. Pass --workstream <name>.`);
+  }
+  if (ws) {
+    const wsPath = join(wsDir, ws);
+    if (!existsSync(wsPath)) die(`no workstream "${ws}" under ${wsDir}`);
+    return wsPath;
   }
   return p;
 }
@@ -308,12 +321,14 @@ function Page({ wcc }) {
       <div>
         <Row style={{ flexWrap: 'wrap' }}>
           <Pill>{GSD.milestone || 'GSD'}</Pill>
+          {GSD.workstream && <span style={{ ...tag, color: C.link, borderColor: C.link }}>⌥ {GSD.workstream}</span>}
           <span style={{ fontWeight: 600 }}>{GSD.milestoneName || GSD.title}</span>
           <span style={{ ...tag, color: C.warn, borderColor: C.warn }}>{GSD.status || 'in progress'}</span>
           <span style={{ marginLeft: 'auto', color: C.muted, fontSize: 12 }}>updated {GSD.lastUpdated || '—'}</span>
         </Row>
         <div style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>
           GSD planning view · <code>{GSD.planningPath}</code>
+          {GSD.importedAt && <> · <span title="this page is a snapshot — re-run import-gsd to refresh">imported {GSD.importedAt.slice(0, 16).replace('T', ' ')} — re-run to refresh</span></>}
         </div>
       </div>
 
@@ -569,9 +584,12 @@ function main() {
   const title = args.title || fm.milestone_name || `GSD: ${basename(planningRoot)}`;
   const id = slug(args.id || title);
 
+  const wsMatch = planningRoot.match(/workstreams[/\\]([^/\\]+)\/?$/);
   const gsd = {
     title,
     planningPath: planningRoot,
+    workstream: wsMatch ? wsMatch[1] : null,
+    importedAt: nowIso(),
     milestone: fm.milestone || null,
     milestoneName: fm.milestone_name || null,
     status: fm.status || null,

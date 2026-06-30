@@ -30,7 +30,7 @@
 // Usage:
 //   node bin/capture-gsd.mjs --id <id> --planning <path> [--workstream <name>] [--dry-run]
 
-import { readFileSync, writeFileSync, renameSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -90,14 +90,25 @@ function parseArgs(argv) {
 }
 function die(msg) { console.error(`capture-gsd: ${msg}`); process.exit(1); }
 
+// Mirrors import-gsd's resolver: explicit --workstream wins; else auto-detect a
+// workstream-mode tree via the gitignored active-workstream pointer or a sole workstream.
 function resolvePlanningRoot(args) {
   let p = resolve(args.planning === true ? '.planning' : args.planning || '.planning');
   if (!existsSync(p)) die(`no such path: ${p}`);
   if (statSync(p).isDirectory() && basename(p) !== '.planning' && existsSync(join(p, '.planning'))) p = join(p, '.planning');
-  if (args.workstream) {
-    const ws = join(p, 'workstreams', args.workstream);
-    if (!existsSync(ws)) die(`no workstream "${args.workstream}" under ${join(p, 'workstreams')}`);
-    return ws;
+  const wsDir = join(p, 'workstreams');
+  let ws = args.workstream === true ? null : args.workstream;
+  if (!ws && existsSync(wsDir)) {
+    const names = readdirSync(wsDir).filter((d) => { try { return statSync(join(wsDir, d)).isDirectory(); } catch { return false; } });
+    let active = ''; try { active = readFileSync(join(p, 'active-workstream'), 'utf8').trim(); } catch {}
+    if (active && names.includes(active)) ws = active;
+    else if (names.length === 1) ws = names[0];
+    else if (names.length > 1) die(`workstream mode: ${names.length} workstreams (${names.join(', ')}) and no --workstream / active-workstream. Pass --workstream <name>.`);
+  }
+  if (ws) {
+    const wsPath = join(wsDir, ws);
+    if (!existsSync(wsPath)) die(`no workstream "${ws}" under ${wsDir}`);
+    return wsPath;
   }
   return p;
 }
