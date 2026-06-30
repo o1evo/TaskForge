@@ -8,6 +8,10 @@ import Thread from './components/Thread.jsx';
 import PageRuntime, { buildWcc } from './components/PageRuntime.jsx';
 import Markdown from './components/Markdown.jsx';
 import CopyButton from './components/CopyButton.jsx';
+import { applyTheme, pagePalette, readSavedTheme, THEME_LIST } from './themes.js';
+
+// Apply the saved theme before React mounts (no flash of the default palette).
+applyTheme(readSavedTheme());
 
 const POLL_MS = 3000;
 const CURRENT_KEY = 'wcc.currentReview';
@@ -21,6 +25,7 @@ export default function App() {
   const [pendingJump, setPendingJump] = useState(null); // DOM id to scroll to after a tab switch
   const [paletteOpen, setPaletteOpen] = useState(false); // ⌘K task switcher
   const [manageOpen, setManageOpen] = useState(false); // "manage tasks" modal
+  const [theme, setTheme] = useState(readSavedTheme); // color theme (chrome + pages)
   const mtimeRef = useRef(null);
 
   // Cross-tab navigation handed to the Log page via wcc.onNavigate: switch tabs
@@ -41,6 +46,13 @@ export default function App() {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
+
+  // Apply + persist the theme whenever it changes (chrome re-themes via CSS vars;
+  // pages re-theme via wcc.theme on their next render).
+  useEffect(() => {
+    applyTheme(theme);
+    try { localStorage.setItem('wcc.theme', theme); } catch { /* ignore */ }
+  }, [theme]);
 
   // Load the list of reviews once. Restore the most-recently-selected task
   // for this client (localStorage is per-browser), falling back to the first.
@@ -179,6 +191,9 @@ export default function App() {
               <button className="task-manage-btn" onClick={() => setManageOpen(true)} title="Manage tasks">⚙</button>
             </div>
           )}
+          <select className="theme-pick" value={theme} onChange={(e) => setTheme(e.target.value)} title="Color theme">
+            {THEME_LIST.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
         </div>
@@ -221,6 +236,7 @@ export default function App() {
               onAnchorState: changeAnchorState,
               onAnchorDelete: removeAnchor,
               onNavigate: goToView,
+              theme: pagePalette(theme),
             })}
           />
         ) : (

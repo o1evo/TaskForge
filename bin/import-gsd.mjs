@@ -353,7 +353,9 @@ function renderPage(gsd) {
 
 const GSD = ${json};
 
-const C = { text: '#c9d1d9', muted: '#8b949e', border: '#30363d', panel: '#161b22', panel2: '#1c2129', link: '#58a6ff', ok: '#2ea043', warn: '#d29922' };
+// Colors come from the app's theme via CSS variables, so generated pages follow the
+// active theme (navy / dark-neutral / light) for free — no hardcoded palette.
+const C = { text: 'var(--text)', muted: 'var(--muted)', border: 'var(--border)', panel: 'var(--panel)', panel2: 'var(--panel-2)', link: 'var(--link)', ok: 'var(--resolved)', warn: 'var(--medium)' };
 
 function Page({ wcc }) {
   const { Markdown, Thread } = wcc;
