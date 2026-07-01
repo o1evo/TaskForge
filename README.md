@@ -339,7 +339,7 @@ start/stop is reflected within 3s. Build + install:
 
 ```bash
 cd vscode-extension && npx @vscode/vsce package
-code --install-extension work-command-center-vscode-0.1.0.vsix
+code --install-extension taskforge-vscode-0.1.0.vsix
 ```
 
 See [vscode-extension/README.md](vscode-extension/README.md) for commands and settings.

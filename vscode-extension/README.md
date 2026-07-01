@@ -35,8 +35,8 @@ Development Host, or package + install:
 
 ```bash
 cd vscode-extension
-npx @vscode/vsce package      # produces work-command-center-vscode-0.1.0.vsix
-code --install-extension work-command-center-vscode-0.1.0.vsix
+npx @vscode/vsce package      # produces taskforge-vscode-0.1.0.vsix
+code --install-extension taskforge-vscode-0.1.0.vsix
 ```
 
 Then run **TaskForge: Open** from the command palette.

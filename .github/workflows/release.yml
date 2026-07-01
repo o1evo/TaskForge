@@ -1,9 +1,11 @@
 name: Release
 
 # Cut a release by pushing a SemVer tag to the public repo:
-#   git tag v0.2.0 && git push <public-remote> v0.2.0
+#   git tag v0.2.0        && git push <public-remote> v0.2.0        # stable
+#   git tag v0.2.0-beta.1 && git push <public-remote> v0.2.0-beta.1 # prerelease
+# A tag with a hyphen (-beta/-rc/…) is published as a GitHub *prerelease*.
 # This builds the VS Code extension .vsix and publishes a GitHub Release with it
-# attached. See RELEASING.md for the full flow.
+# attached. The tag must match vscode-extension/package.json version exactly.
 
 on:
   push:
@@ -56,10 +58,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A SemVer prerelease tag (has a hyphen, e.g. v0.1.2-beta.1) → mark the
+          # GitHub Release as a prerelease. A plain vX.Y.Z tag → stable release.
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in *-*) PRERELEASE="--prerelease" ;; esac
           if [ "${{ steps.notes.outputs.no-notes }}" = "true" ]; then
             gh release create "$GITHUB_REF_NAME" vscode-extension/*.vsix \
-              --title "$GITHUB_REF_NAME" --generate-notes
+              --title "$GITHUB_REF_NAME" --generate-notes $PRERELEASE
           else
             gh release create "$GITHUB_REF_NAME" vscode-extension/*.vsix \
-              --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+              --title "$GITHUB_REF_NAME" --notes-file release-notes.md $PRERELEASE
           fi
