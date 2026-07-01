@@ -1,0 +1,65 @@
+name: Release
+
+# Cut a release by pushing a SemVer tag to the public repo:
+#   git tag v0.2.0 && git push <public-remote> v0.2.0
+# This builds the VS Code extension .vsix and publishes a GitHub Release with it
+# attached. See RELEASING.md for the full flow.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify tag matches extension version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./vscode-extension/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match vscode-extension/package.json version $PKG. Bump the version and the CHANGELOG before tagging."
+            exit 1
+          fi
+          echo "Releasing v$PKG"
+
+      - name: Package the VS Code extension
+        working-directory: vscode-extension
+        run: |
+          cp ../LICENSE LICENSE   # ship the MIT license inside the .vsix (gitignored copy)
+          npx --yes @vscode/vsce package
+
+      - name: Extract changelog notes for this version
+        id: notes
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          # Pull the section between "## [VER]" and the next "## [" heading.
+          awk -v ver="$VER" '
+            $0 ~ "^## \\[" ver "\\]" {grab=1; next}
+            grab && /^## \[/ {exit}
+            grab && /^\[[^]]+\]:/ {next}   # drop trailing link-reference defs
+            grab {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then echo "no-notes=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.notes.outputs.no-notes }}" = "true" ]; then
+            gh release create "$GITHUB_REF_NAME" vscode-extension/*.vsix \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          else
+            gh release create "$GITHUB_REF_NAME" vscode-extension/*.vsix \
+              --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+          fi

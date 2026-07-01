@@ -12,5 +12,10 @@ dist/
 *.log
 .DS_Store
 
+# Built VS Code extension package — produced by the release workflow, never committed.
+*.vsix
+# LICENSE copy the release workflow drops into the extension so it ships in the .vsix.
+/vscode-extension/LICENSE
+
 # WCC controller runtime state (pidfile + server log) — see bin/wcc-mcp.mjs
 .wcc/

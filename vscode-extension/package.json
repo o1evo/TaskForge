@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "wcc",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/o1evo/WorkCommandCenter.git",
+    "directory": "vscode-extension"
+  },
   "engines": {
     "vscode": "^1.84.0"
   },
