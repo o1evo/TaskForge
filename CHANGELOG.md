@@ -10,6 +10,14 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+## [0.1.2-beta.1]
+
+_Prerelease._
+
+- New TaskForge icon — an anvil with hammer and sparkles — for the VS Code
+  activity bar, replacing the placeholder glyph. Tightened viewBox and a bolder
+  outline so it reads at 16–24px.
+
 ## [0.1.0]
 
 Baseline release.
@@ -25,5 +33,6 @@ Baseline release.
 - VS Code extension (webview panel + Start button + status bar).
 - Optional `taskforge` MCP controller for detached server lifecycle.
 
-[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.2-beta.1...HEAD
+[0.1.2-beta.1]: https://github.com/o1evo/TaskForge/releases/tag/v0.1.2-beta.1
 [0.1.0]: https://github.com/o1evo/TaskForge/releases/tag/v0.1.0

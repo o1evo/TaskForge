@@ -2,7 +2,7 @@
   "name": "taskforge-vscode",
   "displayName": "TaskForge",
   "description": "Render the TaskForge inside VS Code, with a one-click Start button when the server isn't running.",
-  "version": "0.1.0",
+  "version": "0.1.2-beta.1",
   "publisher": "taskforge",
   "license": "MIT",
   "repository": {
