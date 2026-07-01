@@ -300,6 +300,10 @@ async function openPanel() {
     enableScripts: true,
     retainContextWhenHidden: true,
   });
+  panel.iconPath = {
+    light: vscode.Uri.file(path.join(__dirname, 'media', 'taskforge-tab-light.svg')),
+    dark: vscode.Uri.file(path.join(__dirname, 'media', 'taskforge-tab-dark.svg')),
+  };
   panel.onDidDispose(() => { panel = null; stopPolling(); });
   attach(panel.webview);
   await render(false);
