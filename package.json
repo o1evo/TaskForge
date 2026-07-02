@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@babel/standalone": "^7.29.7",
+    "devicon": "^2.17.0",
     "marked": "^18.0.5",
     "prismjs": "^1.30.0",
     "react": "^18.3.1",

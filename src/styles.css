@@ -16,13 +16,17 @@
   --low: #3fb950;
   --note: #8b949e;
   --resolved: #2ea043;
+  /* Desaturated fractal-noise tile for the Grain backdrop (inlined SVG, no asset). */
+  --tf-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* The app backing. --bg-opacity (set by the Transparency slider, default 100%)
+     thins it so a VS Code vibrancy blur + the backdrop effect show through. */
+  background: color-mix(in srgb, var(--bg) var(--bg-opacity, 100%), transparent);
   color: var(--text);
   font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
@@ -31,7 +35,7 @@ code, pre, .code, .diff td.code, .review-meta code {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
-.app { max-width: 1380px; margin: 0 auto; padding: 20px 24px 80px; }
+.app { max-width: 1380px; margin: 0 auto; padding: 20px 24px 80px; position: relative; isolation: isolate; }
 
 .app-header {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -47,7 +51,118 @@ code, pre, .code, .diff td.code, .review-meta code {
 }
 .poll-dot { color: var(--low); font-size: 12px; }
 .header-pending { color: var(--medium); font-size: 12px; }
-.theme-pick { font-size: 12px; padding: 3px 6px; }
+/* ---- Appearance menu: one 🎨 control → palette / transparency / backdrop ---- */
+.appearance { position: relative; }
+.appearance-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 7px; line-height: 0; cursor: pointer;
+}
+.appearance-ico { display: block; }
+.appearance-btn:hover, .appearance-btn.on { color: var(--text); border-color: var(--link); }
+.appearance-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: 260px;
+  max-height: calc(100vh - 80px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 10px; font-size: 13px;
+}
+.ap-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; padding: 4px 6px; }
+.ap-divider { height: 1px; background: var(--border); margin: 8px 2px; }
+.ap-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: 0; color: var(--text); text-align: left;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit;
+}
+.ap-row:hover { background: var(--panel-2); }
+.ap-row.active { background: var(--panel-2); }
+.ap-row-name { flex: 1 1 auto; }
+.ap-check { flex: 0 0 auto; color: var(--link); font-weight: 700; }
+.ap-swatch { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); }
+.ap-fx-dot { flex: 0 0 auto; width: 14px; height: 14px; border-radius: 5px; border: 1px solid var(--border); }
+.fx-dot-none { background: repeating-linear-gradient(45deg, var(--panel-2) 0 3px, transparent 3px 6px); }
+.fx-dot-glow { background: radial-gradient(circle at 30% 30%, var(--link), var(--panel-2)); }
+.fx-dot-wash { background: linear-gradient(135deg, var(--link), var(--medium)); }
+.fx-dot-aurora { background: linear-gradient(120deg, var(--low), var(--link), var(--high)); }
+.fx-dot-grid {
+  background-color: var(--panel-2);
+  background-image: linear-gradient(var(--muted) 1px, transparent 1px), linear-gradient(90deg, var(--muted) 1px, transparent 1px);
+  background-size: 5px 5px;
+}
+.fx-dot-dots {
+  background-color: var(--panel-2);
+  background-image: radial-gradient(var(--muted) 1px, transparent 1.4px);
+  background-size: 5px 5px;
+}
+.fx-dot-hatch {
+  background-color: var(--panel-2);
+  background-image: repeating-linear-gradient(45deg, var(--muted) 0 1px, transparent 1px 4px);
+}
+.fx-dot-grain { background: var(--panel-2) var(--tf-noise); background-size: 40px; }
+.ap-slider-row { display: flex; align-items: center; gap: 10px; padding: 4px 8px 2px; }
+.ap-slider-row input[type=range] { flex: 1 1 auto; accent-color: var(--link); cursor: pointer; }
+.ap-slider-lead { flex: 0 0 auto; color: var(--muted); font-size: 12px; }
+.ap-slider-val { flex: 0 0 auto; width: 40px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ap-slider-row.ap-disabled { opacity: .45; }
+.ap-slider-row.ap-disabled input[type=range] { cursor: default; }
+.ap-hint { color: var(--muted); font-size: 11px; line-height: 1.4; padding: 2px 8px 0; }
+
+/* ---- Backdrop effects: a fixed decorative layer behind app content ----
+   Sits between the (transparency-thinned) body backing and the content, so it
+   shows over the tint and — when transparency is up — alongside vibrancy. */
+.tf-backdrop { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.tf-backdrop::before, .tf-backdrop::after { content: ""; position: absolute; inset: -20%; }
+.tf-backdrop.fx-none::before, .tf-backdrop.fx-none::after { content: none; }
+
+/* Glow — a soft accent bloom drifting near the top. */
+.tf-backdrop.fx-glow::before {
+  background: radial-gradient(60% 45% at 50% 0%, color-mix(in srgb, var(--link) 45%, transparent), transparent 70%);
+}
+/* Wash — a gentle diagonal accent gradient. */
+.tf-backdrop.fx-wash::before {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--link) 26%, transparent), transparent 55%,
+    color-mix(in srgb, var(--high) 22%, transparent));
+}
+/* Aurora — two blurred color blobs slowly drifting. */
+.tf-backdrop.fx-aurora::before {
+  background:
+    radial-gradient(40% 30% at 25% 30%, color-mix(in srgb, var(--low) 55%, transparent), transparent 70%),
+    radial-gradient(45% 35% at 75% 25%, color-mix(in srgb, var(--link) 55%, transparent), transparent 70%);
+  filter: blur(50px); animation: tf-aurora 18s ease-in-out infinite alternate;
+}
+.tf-backdrop.fx-aurora::after {
+  background: radial-gradient(40% 30% at 60% 80%, color-mix(in srgb, var(--high) 45%, transparent), transparent 70%);
+  filter: blur(60px); animation: tf-aurora 22s ease-in-out infinite alternate-reverse;
+}
+@keyframes tf-aurora {
+  from { transform: translate3d(-4%, -2%, 0) scale(1); }
+  to   { transform: translate3d(5%, 4%, 0) scale(1.15); }
+}
+/* Grid — fine ruled lines. */
+.tf-backdrop.fx-grid::before {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+/* Dotted grid — a dot at each grid intersection. */
+.tf-backdrop.fx-dots::before {
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 16%, transparent) 1.5px, transparent 1.7px);
+  background-size: 24px 24px;
+}
+/* Hatch — thin diagonal ruling. */
+.tf-backdrop.fx-hatch::before {
+  background-image: repeating-linear-gradient(45deg,
+    color-mix(in srgb, var(--text) 8%, transparent) 0 1px, transparent 1px 13px);
+}
+/* Grain — desaturated fractal noise (inlined SVG), kept faint. */
+.tf-backdrop.fx-grain::before {
+  background-image: var(--tf-noise);
+  background-size: 160px 160px;
+  opacity: .07;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-backdrop.fx-aurora::before, .tf-backdrop.fx-aurora::after { animation: none; }
+}
 
 /* ── header task buttons ────────────────────────────────────────────────── */
 .task-switch-wrap { display: inline-flex; align-items: center; gap: 4px; }
@@ -646,17 +761,68 @@ tr.jump-flash td { background: var(--add-gutter) !important; }
 .taskforge-coderef-missing { color: var(--muted, #8b949e); cursor: default; border: 0; }
 .taskforge-coderef-tag { font-style: italic; font-size: .85em; opacity: .8; }
 
-@media (max-width: 900px) {
-  .review-layout { grid-template-columns: 1fr; }
-  .review-sidebar { position: static; max-height: none; }
-}
-
 /* sidebar toggle */
 .review-layout.sidebar-collapsed { grid-template-columns: 1fr; }
 .rs-collapse { float: right; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 12px; padding: 1px 9px; font-size: 11px; cursor: pointer; margin: 0 2px 2px; }
 .rs-collapse:hover { color: var(--text); border-color: var(--link); }
 .rs-toggle { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; margin-bottom: 14px; }
 .rs-toggle:hover { border-color: var(--link); color: var(--link); }
+
+/* ---- Code Review tab: file tree sidebar ---- */
+.file-tree { padding: 8px 6px; }
+.ft-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; color: var(--text); padding: 2px 6px 8px; }
+.ft-count { font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 1px 7px; }
+.ft-dir, .ft-file {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: 0; color: var(--text); text-align: left;
+  padding: 3px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px;
+}
+.ft-dir:hover, .ft-file:hover { background: var(--panel-2); }
+.ft-caret { flex: 0 0 auto; width: 10px; color: var(--muted); font-size: 10px; }
+.ft-icon { flex: 0 0 auto; width: 16px; text-align: center; font-size: 14px; font-style: normal; }
+.ft-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-dir .ft-name { color: var(--muted); }
+.ft-badge { flex: 0 0 auto; font-size: 10px; font-weight: 700; color: var(--medium); border: 1px solid var(--medium); border-radius: 9px; padding: 0 6px; }
+
+/* ---- Threads bubble: floating, fixed bottom-right, per-tab ---- */
+.tf-bubble { position: fixed; right: 18px; bottom: 18px; z-index: 40; }
+.tf-bubble-fab {
+  width: 48px; height: 48px; border-radius: 50%; cursor: pointer;
+  background: var(--link); border: 1px solid var(--link); color: #fff;
+  font-size: 20px; line-height: 1; box-shadow: 0 3px 12px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+.tf-bubble-fab:hover { filter: brightness(1.08); }
+.tf-bubble-fab.has-pending { border-color: var(--medium); }
+.tf-bubble-fab-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px;
+  background: var(--medium); color: #fff; border-radius: 9px; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg, #0d1117);
+}
+.tf-bubble-panel {
+  position: absolute; right: 0; bottom: 58px; width: 360px; max-width: calc(100vw - 36px);
+  max-height: min(70vh, 620px); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.45); font-size: 12.5px; overflow: hidden;
+}
+.tf-bubble-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.tf-bubble-head strong { flex: 1 1 auto; }
+.tf-bubble-pending { font-size: 10px; font-weight: 700; color: var(--medium); border: 1px solid var(--medium); border-radius: 9px; padding: 1px 6px; }
+.tf-bubble-x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; }
+.tf-bubble-x:hover { color: var(--text); }
+.tf-bubble-tabs { display: flex; gap: 6px; padding: 8px 10px 0; }
+.tf-bubble-tabs button { flex: 1 1 0; background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 8px 8px 0 0; padding: 5px 8px; font-size: 12px; cursor: pointer; border-bottom: 0; }
+.tf-bubble-tabs button.active { color: var(--text); border-color: var(--link); }
+.tf-tab-count { margin-left: 5px; font-size: 10px; color: var(--muted); }
+.tf-bubble-body { overflow-y: auto; padding: 8px; }
+.tf-thread { border-bottom: 1px solid var(--border); }
+.tf-thread:last-child { border-bottom: 0; }
+.tf-thread-body { padding: 4px 6px 10px; }
+
+@media (max-width: 900px) {
+  .review-layout { grid-template-columns: 1fr; }
+  .review-sidebar { position: static; max-height: none; }
+}
 
 /* inline (line-anchored) findings — sit in the diff where a GH review comment would */
 .annotation-row td { padding: 0; background: var(--panel); }

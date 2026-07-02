@@ -4,15 +4,43 @@ import HunkView from './components/HunkView.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import TasksManager from './components/TasksManager.jsx';
 import FindBar from './components/FindBar.jsx';
-import ReviewSidebar from './components/ReviewSidebar.jsx';
+import FileTree, { fileDomId } from './components/FileTree.jsx';
+import ThreadsBubble from './components/ThreadsBubble.jsx';
 import Thread from './components/Thread.jsx';
 import PageRuntime, { buildTaskForge } from './components/PageRuntime.jsx';
 import Markdown from './components/Markdown.jsx';
 import CopyButton from './components/CopyButton.jsx';
-import { applyTheme, pagePalette, readSavedTheme, THEME_LIST } from './themes.js';
+import AppearanceMenu from './components/AppearanceMenu.jsx';
+import { applyTheme, pagePalette, readSavedTheme } from './themes.js';
 
-// Apply the saved theme before React mounts (no flash of the default palette).
+// Saved transparency (0 = solid, 100 = fully see-through). Migrates the old
+// on/off `taskforge.translucent` flag to a sensible slider value.
+function readTransparency() {
+  try {
+    const v = localStorage.getItem('taskforge.transparency');
+    if (v != null) return Math.max(0, Math.min(100, Number(v) || 0));
+    return localStorage.getItem('taskforge.translucent') === 'on' ? 70 : 0;
+  } catch { return 0; }
+}
+function readBackdrop() {
+  try { return localStorage.getItem('taskforge.backdrop') || 'none'; } catch { return 'none'; }
+}
+function readBackdropOpacity() {
+  try {
+    const v = localStorage.getItem('taskforge.backdropOpacity');
+    return v == null ? 100 : Math.max(0, Math.min(100, Number(v) || 0));
+  } catch { return 100; }
+}
+// Push the transparency amount onto the backdrop's alpha (a CSS var body reads).
+function applyTransparency(t) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty('--bg-opacity', `${100 - t}%`);
+}
+
+// Apply the saved theme + transparency before React mounts (no flash of the
+// default palette / a solid backdrop for a vibrancy user).
 applyTheme(readSavedTheme());
+applyTransparency(readTransparency());
 
 const POLL_MS = 3000;
 const CURRENT_KEY = 'taskforge.currentReview';
@@ -29,6 +57,9 @@ export default function App() {
   const [manageOpen, setManageOpen] = useState(false); // "manage tasks" modal
   const [findOpen, setFindOpen] = useState(false); // ⌘F in-page find bar
   const [theme, setTheme] = useState(readSavedTheme); // color theme (chrome + pages)
+  const [transparency, setTransparency] = useState(readTransparency); // 0 solid → 100 see-through
+  const [backdrop, setBackdrop] = useState(readBackdrop); // decorative backdrop effect id
+  const [backdropOpacity, setBackdropOpacity] = useState(readBackdropOpacity); // effect intensity 0–100
   const mtimeRef = useRef(null);
 
   // Cross-tab navigation handed to the Log page via taskforge.onNavigate: switch tabs
@@ -83,6 +114,20 @@ export default function App() {
     applyTheme(theme);
     try { localStorage.setItem('taskforge.theme', theme); } catch { /* ignore */ }
   }, [theme]);
+
+  // Transparency thins the app backdrop so a VS Code vibrancy blur (and the
+  // chosen backdrop effect) show through; panels stay opaque so content stays
+  // readable. Backdrop just picks the decorative effect layer rendered below.
+  useEffect(() => {
+    applyTransparency(transparency);
+    try { localStorage.setItem('taskforge.transparency', String(transparency)); } catch { /* ignore */ }
+  }, [transparency]);
+  useEffect(() => {
+    try { localStorage.setItem('taskforge.backdrop', backdrop); } catch { /* ignore */ }
+  }, [backdrop]);
+  useEffect(() => {
+    try { localStorage.setItem('taskforge.backdropOpacity', String(backdropOpacity)); } catch { /* ignore */ }
+  }, [backdropOpacity]);
 
   // Load the list of reviews once. Restore the most-recently-selected task
   // for this client (localStorage is per-browser), falling back to the first.
@@ -218,6 +263,8 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className={`tf-backdrop fx-${backdrop}`} aria-hidden="true" data-taskforge-ui
+        style={{ opacity: backdropOpacity / 100 }} />
       <header className="app-header">
         <div className="header-left">
           <div className="brand">TaskForge</div>
@@ -238,9 +285,10 @@ export default function App() {
               <button className="task-manage-btn" onClick={() => setManageOpen(true)} title="Manage tasks">⚙</button>
             </div>
           )}
-          <select className="theme-pick" value={theme} onChange={(e) => setTheme(e.target.value)} title="Color theme">
-            {THEME_LIST.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-          </select>
+          <AppearanceMenu theme={theme} onTheme={setTheme}
+            transparency={transparency} onTransparency={setTransparency}
+            backdrop={backdrop} onBackdrop={setBackdrop}
+            backdropOpacity={backdropOpacity} onBackdropOpacity={setBackdropOpacity} />
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
         </div>
@@ -272,20 +320,24 @@ export default function App() {
 
       {activeView === 'log' && (
         hasPage ? (
-          <PageRuntime
-            source={data._page.source}
-            taskforge={buildTaskForge({
-              id: currentId,
-              data,
-              onSend: send,
-              onDelete: removeMessage,
-              onAnchor: createAnchor,
-              onAnchorState: changeAnchorState,
-              onAnchorDelete: removeAnchor,
-              onNavigate: goToView,
-              theme: pagePalette(theme),
-            })}
-          />
+          <>
+            <PageRuntime
+              source={data._page.source}
+              taskforge={buildTaskForge({
+                id: currentId,
+                data,
+                onSend: send,
+                onDelete: removeMessage,
+                onAnchor: createAnchor,
+                onAnchorState: changeAnchorState,
+                onAnchorDelete: removeAnchor,
+                onNavigate: goToView,
+                theme: pagePalette(theme),
+              })}
+            />
+            <ThreadsBubble scope="log" hunks={hunks} threads={threads} anchors={review.anchors || {}}
+              onSend={send} onDelete={removeMessage} onDeleteAnchor={removeAnchor} onSetAnchorState={changeAnchorState} />
+          </>
         ) : (
           <NoPage id={currentId} />
         )
@@ -351,14 +403,19 @@ function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDelete
     return () => cancelAnimationFrame(raf);
   }, [jumpTarget]);
 
+  // Changed files (diff order), each tagged with its finding count for the tree badge.
+  const files = Object.entries(byFile).map(([file, fileHunks]) => ({
+    path: file,
+    findings: fileHunks.reduce((n, h) => n + ((h.annotations && h.annotations.length) || 0), 0),
+  }));
+
   return (
     <div className={`review-layout ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      {sidebarOpen && <ReviewSidebar hunks={hunks} threads={threads} anchors={review.anchors || {}} onJump={jumpTo} onClose={toggleSidebar}
-        onDeleteThread={onDeleteThread} onDeleteAnchor={onDeleteAnchor} onSetAnchorState={onSetAnchorState} />}
+      {sidebarOpen && <FileTree files={files} onJump={jumpTo} onClose={toggleSidebar} />}
       <div className="review-main">
         {!sidebarOpen && (
-          <button className="rs-toggle" onClick={toggleSidebar} title="show findings & comments index">
-            ☰ Findings &amp; comments
+          <button className="rs-toggle" onClick={toggleSidebar} title="show the file tree">
+            ☰ Files
           </button>
         )}
         <section className="general">
@@ -368,7 +425,7 @@ function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDelete
         </section>
 
         {Object.entries(byFile).map(([file, fileHunks]) => (
-          <section key={file} className="file">
+          <section key={file} id={fileDomId(file)} className="file">
             <h2 className="file-name">{file}</h2>
             {fileHunks.map((h) => (
               <HunkView key={h.id} hunk={h} threads={threads} onSend={onSend} onDelete={onDelete} onDeleteThread={onDeleteThread} />
@@ -376,6 +433,10 @@ function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDelete
           </section>
         ))}
       </div>
+
+      <ThreadsBubble scope="review" hunks={hunks} threads={threads} anchors={review.anchors || {}}
+        onJump={jumpTo} onSend={onSend} onDelete={onDelete}
+        onDeleteThread={onDeleteThread} onDeleteAnchor={onDeleteAnchor} onSetAnchorState={onSetAnchorState} />
     </div>
   );
 }

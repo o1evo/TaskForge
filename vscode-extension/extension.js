@@ -179,7 +179,10 @@ function runningHtml(url) {
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none'; frame-src ${url}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>
-  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:#1e1e1e; }
+  /* Transparent host so the app's backdrop reaches the editor group behind it —
+     lets a VS Code vibrancy blur show through when the app's Translucent toggle
+     is on. Harmless when it's off: the app paints a solid backdrop over this. */
+  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:transparent; }
   iframe { border:0; width:100%; height:100%; display:block; }
 </style></head>
 <body>
