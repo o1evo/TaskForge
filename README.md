@@ -277,7 +277,12 @@ on the next 3s poll (no restart), and the tab only appears when its file exists.
   task (status pill, findings, dated timeline, follow-ups). Contract: define
   `function Page({ taskforge }) { … }`, **no imports/exports**; `React` + hooks are in
   scope and `taskforge` is injected (data + `<taskforge.Thread target="log:…">` to pin a
-  discussion + `<taskforge.Markdown>`). Readers can also select any text on the page to
+  discussion + `<taskforge.Markdown>`). **For any in-page tabs/selection state use
+  `taskforge.useTab(key, default)` — never a raw `useState`.** Editing `Page.jsx`
+  remounts the component, so a raw `useState` tab resets to its default on every
+  edit (it kept knocking you back to the first tab); `useTab` persists the choice
+  in `localStorage` (keyed by task id + `key`), surviving both edits and reloads.
+  Readers can also select any text on the page to
   drop a 💬 comment (a `log:` anchor) — no code needed. Authored via the
   **`taskforge-worklog`** skill.
 - **QA plan → `work/<id>/qa-plan.md`** — plain Markdown (no JSX), rendered with

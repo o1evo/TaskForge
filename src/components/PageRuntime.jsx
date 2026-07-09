@@ -163,6 +163,25 @@ export function buildTaskForge({ id, data, onSend, onDelete, onAnchor, onAnchorS
     review: data.review || {},
     hunks,
     threads,
+    // Persistent tab/selection state — THE standard for in-page tabs. A raw
+    // useState resets every time Claude edits Page.jsx (the source changes →
+    // PageRuntime recompiles → the Page component remounts → its state dies),
+    // which is what kept knocking you back to the first tab. This stores the
+    // choice in localStorage keyed by task id + a caller key, so it survives
+    // both recompiles and full reloads. Pages do:
+    //   const [tab, setTab] = taskforge.useTab('main', 0)
+    useTab: (key, def = 0) => {
+      const storeKey = `taskforge-tab:${id}:${key}`;
+      const [v, setV] = React.useState(() => {
+        try { const s = localStorage.getItem(storeKey); return s == null ? def : JSON.parse(s); }
+        catch { return def; }
+      });
+      const set = (nv) => {
+        try { localStorage.setItem(storeKey, JSON.stringify(nv)); } catch { /* ignore */ }
+        setV(nv);
+      };
+      return [v, set];
+    },
     Thread: PageThread,
     theme: theme || {}, // active color palette — pages do `const C = taskforge.theme` and theme for free
     Markdown, // <taskforge.Markdown text="# full markdown\n- lists, tables, ```fences``` " />

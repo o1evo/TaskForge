@@ -122,6 +122,7 @@ page. The essentials:
 
 - Define `function Page({ taskforge }) { … }`. **No imports/exports.**
 - In scope: `React` + hooks (`useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`).
+- **In-page tabs / selection state: use `const [tab, setTab] = taskforge.useTab(key, default)`, NOT a raw `useState`.** Editing `Page.jsx` remounts the component, so a raw `useState` tab resets to its default on every edit; `useTab` persists the choice in `localStorage` (keyed by task id + `key`) so it survives edits and reloads.
 - A broken page shows an error panel (compile + runtime), never a white screen — iterate freely.
 
 ### Two ways to start a thread on the page
