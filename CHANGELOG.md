@@ -10,6 +10,20 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+## [0.1.3-beta.3]
+
+_Prerelease._
+
+- In-page **Find** (⌘F inside the webview) now drives its own match traversal via
+  the CSS Custom Highlight API instead of `window.find()`. The input keeps focus
+  while you type (it no longer jumped away after one keystroke), a live **"3 / 17"**
+  match count is shown, and ⌘/Ctrl+A/C/V are scoped to the find input so they no
+  longer trigger the page-wide handlers.
+- Added **`taskforge.useTab(key, default)`** for in-page tabs/selection state. It
+  persists the choice in `localStorage` (keyed by task id + key), so editing
+  `Page.jsx` — which remounts the component — no longer knocks the reader back to
+  the first tab. Documented as the standard over raw `useState`.
+
 ## [0.1.3-beta.2]
 
 _Prerelease._
@@ -60,7 +74,8 @@ Baseline release.
 - VS Code extension (webview panel + Start button + status bar).
 - Optional `taskforge` MCP controller for detached server lifecycle.
 
-[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.2...HEAD
+[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...HEAD
+[0.1.3-beta.3]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.2...v0.1.3-beta.3
 [0.1.3-beta.2]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.1...v0.1.3-beta.2
 [0.1.3-beta.1]: https://github.com/o1evo/TaskForge/compare/v0.1.2-beta.1...v0.1.3-beta.1
 [0.1.2-beta.1]: https://github.com/o1evo/TaskForge/releases/tag/v0.1.2-beta.1
