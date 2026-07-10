@@ -10,6 +10,32 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+## [0.1.3]
+
+Stable release rolling up the `0.1.3-beta.1 … beta.3` line.
+
+- **Code Review file tree + threads bubble.** The Code Review sidebar is a
+  GitHub-style file tree (with file-type icons) that jumps to a file's section in
+  the diff; the findings/comments index moved into a floating, per-tab threads
+  bubble that keeps Code Review and Log threads separate.
+- **Palette control.** The theme dropdown + translucency toggle were replaced with
+  a single palette popover: Palette picker, a Transparency slider (thins the app
+  backing so an editor vibrancy blur can show through — panels stay solid), and
+  decorative Backdrop effects (Glow, Wash, Grid, Dotted grid, Hatch, Grain,
+  Aurora) with an Intensity slider. The VS Code webview host is now transparent so
+  the transparency setting can reach a vibrancy blur behind the panel.
+- **In-page Find rewrite.** ⌘F inside the webview drives its own match traversal
+  via the CSS Custom Highlight API instead of `window.find()`: the input keeps
+  focus while you type, a live "3 / 17" match count is shown, and ⌘/Ctrl+A/C/V are
+  scoped to the find input so they no longer trigger page-wide handlers.
+- **`taskforge.useTab(key, default)`** for in-page tabs/selection state, persisted
+  in `localStorage` (keyed by task id + key) so editing `Page.jsx` no longer knocks
+  the reader back to the first tab. Documented as the standard over raw `useState`.
+- **Windows / clean-checkout fixes.** Removed the committed `node_modules` symlink
+  that broke `npm install`/the build on Windows and clean checkouts, and added
+  `package-lock.json`. The editor-tab icon is now themed via fixed light/dark
+  variants so it matches other tabs instead of rendering a solid-black glyph.
+
 ## [0.1.3-beta.3]
 
 _Prerelease._
@@ -74,7 +100,8 @@ Baseline release.
 - VS Code extension (webview panel + Start button + status bar).
 - Optional `taskforge` MCP controller for detached server lifecycle.
 
-[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...HEAD
+[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...v0.1.3
 [0.1.3-beta.3]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.2...v0.1.3-beta.3
 [0.1.3-beta.2]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.1...v0.1.3-beta.2
 [0.1.3-beta.1]: https://github.com/o1evo/TaskForge/compare/v0.1.2-beta.1...v0.1.3-beta.1
