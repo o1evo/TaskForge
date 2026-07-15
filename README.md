@@ -342,16 +342,6 @@ phases yourself and `refresh`/`integrate` at each checkpoint. Three subcommands 
 `start`, `refresh`, `integrate`. Workstation-specific overlays of this loop also
 ship as skills in [.claude/skills/](.claude/skills/).
 
-## Relay — story checkpoint runner (PoC)
-
-[bin/relay-*](bin/) is an experimental loop where a headless Claude works a story
-and, when it hits a real product decision, posts a **code-anchored question into
-TaskForge** and stops; a human answers in the diff context and clicks **▶ Resume
-runner** (`POST /api/review/:id/run`). See [bin/relay-README.md](bin/relay-README.md).
-**Security:** that endpoint runs a local process with no auth — fine for a
-127.0.0.1 single box, but **gate it behind authentication before exposing TaskForge on
-any network.**
-
 ## VS Code extension
 
 [vscode-extension/](vscode-extension/) renders TaskForge inside a VS Code editor tab,
