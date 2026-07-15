@@ -10,6 +10,10 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+## [0.1.4-beta.1]
+
+_Prerelease._
+
 - **Linked chats.** `thread.json` now records the AI chat sessions that took part
   in a task (`participants[]`, tool-agnostic). A **💬 chats** header control lists
   them and reopens each one — for Claude, straight into the VS Code chat panel via
@@ -91,7 +95,8 @@ Baseline release.
 - VS Code extension (webview panel + Start button + status bar).
 - Optional `taskforge` MCP controller for detached server lifecycle.
 
-[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...HEAD
+[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.4-beta.1...HEAD
+[0.1.4-beta.1]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...v0.1.4-beta.1
 [0.1.3-beta.3]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.2...v0.1.3-beta.3
 [0.1.3-beta.2]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.1...v0.1.3-beta.2
 [0.1.3-beta.1]: https://github.com/o1evo/TaskForge/compare/v0.1.2-beta.1...v0.1.3-beta.1
