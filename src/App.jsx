@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor, setPageMeta, listTags, saveTag, deleteTag } from './api.js';
+import { listReviews, getReview, postMessage, deleteMessage, deleteThread, postAnchor, setAnchorState, deleteAnchor, setPageMeta, listTags, saveTag, deleteTag, setPrimaryParticipant, deleteParticipant } from './api.js';
+import { openChat, requestRespond, inHost, setSendContext, requestClipboard, runVscodeCommand } from './bridge.js';
 import HunkView from './components/HunkView.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import TasksManager from './components/TasksManager.jsx';
@@ -7,6 +8,7 @@ import FindBar from './components/FindBar.jsx';
 import FileTree, { fileDomId } from './components/FileTree.jsx';
 import ThreadsBubble from './components/ThreadsBubble.jsx';
 import Thread from './components/Thread.jsx';
+import ChatLinks from './components/ChatLinks.jsx';
 import PageRuntime, { buildTaskForge } from './components/PageRuntime.jsx';
 import Markdown from './components/Markdown.jsx';
 import CopyButton from './components/CopyButton.jsx';
@@ -56,10 +58,18 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false); // ⌘K task switcher
   const [manageOpen, setManageOpen] = useState(false); // "manage tasks" modal
   const [findOpen, setFindOpen] = useState(false); // ⌘F in-page find bar
+  const [project, setProject] = useState(() => { // top-level project scope for the ⌘K switcher (null = All)
+    try { return localStorage.getItem('taskforge.currentProject') || null; } catch { return null; }
+  });
   const [theme, setTheme] = useState(readSavedTheme); // color theme (chrome + pages)
   const [transparency, setTransparency] = useState(readTransparency); // 0 solid → 100 see-through
   const [backdrop, setBackdrop] = useState(readBackdrop); // decorative backdrop effect id
   const [backdropOpacity, setBackdropOpacity] = useState(readBackdropOpacity); // effect intensity 0–100
+  // When on (and we're hosted by the extension), posting a question asks the host
+  // to trigger an AI reply — no need to switch to the chat and say "check threads".
+  const [autoRespond, setAutoRespond] = useState(() => {
+    try { return localStorage.getItem('taskforge.autoRespond') !== 'off'; } catch { return true; }
+  });
   const mtimeRef = useRef(null);
 
   // Cross-tab navigation handed to the Log page via taskforge.onNavigate: switch tabs
@@ -74,6 +84,33 @@ export default function App() {
   // browser reload, so we reload explicitly to recover from a wedged view.
   useEffect(() => {
     function onKey(e) {
+      // Webview key workarounds — only inside the extension host, where the
+      // cross-origin iframe swallows ⌘V and VS Code keybindings.
+      if (inHost()) {
+        // Bridged paste: ⌘V/Ctrl+V into a text field. The webview blocks native
+        // paste, so read the clipboard via the host and insert at the caret
+        // (execCommand fires the input event so the controlled textarea updates).
+        if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
+          const el = document.activeElement;
+          const editable = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+          if (editable) {
+            e.preventDefault();
+            requestClipboard().then((t) => { if (t) document.execCommand('insertText', false, t); });
+            return;
+          }
+        }
+        // Forward VS Code shortcuts the focused webview would otherwise eat.
+        if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
+          e.preventDefault();
+          runVscodeCommand(e.shiftKey ? 'workbench.action.previousEditor' : 'workbench.action.nextEditor');
+          return;
+        }
+        if (e.metaKey && e.shiftKey && (e.key === 'w' || e.key === 'W')) {
+          e.preventDefault();
+          runVscodeCommand('workbench.action.closeWindow');
+          return;
+        }
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setPaletteOpen((o) => !o);
@@ -178,6 +215,17 @@ export default function App() {
     try { localStorage.setItem(CURRENT_KEY, id); } catch {}
   }
 
+  // Persisted project scope for the ⌘K task switcher. null → All.
+  function selectProject(p) {
+    setProject(p);
+    try { if (p) localStorage.setItem('taskforge.currentProject', p); else localStorage.removeItem('taskforge.currentProject'); } catch { /* ignore */ }
+  }
+  // Drop a stale scope (project renamed/deleted / no task carries it) so the
+  // switcher can't get stuck showing an empty list.
+  useEffect(() => {
+    if (project && reviews.length && !reviews.some((r) => !r.hidden && r.project === project)) selectProject(null);
+  }, [reviews, project]);
+
   // Poll the selected review; only swap state when the file actually changed.
   useEffect(() => {
     if (!currentId) return;
@@ -211,6 +259,18 @@ export default function App() {
     };
   }, [currentId]);
 
+  // Publish the current page's primary chat + whether it's open, so a Thread's
+  // Send ▾ menu can grey out "Headless — same chat" when that session is live.
+  useEffect(() => {
+    const parts = (data && data.participants) || [];
+    const primary = parts.find((p) => p.role === 'primary') || null;
+    setSendContext({
+      hasPrimary: !!primary,
+      primaryOpen: !!(primary && primary.open),
+      primarySessionId: (primary && primary.sessionId) || null,
+    });
+  }, [data]);
+
   // Force an immediate refresh rather than waiting for the next poll.
   async function refresh() {
     const next = await getReview(currentId);
@@ -221,7 +281,21 @@ export default function App() {
   }
 
   async function send(target, text) {
-    await postMessage(currentId, target, text);
+    const posted = await postMessage(currentId, target, text);
+    // Auto-ask the reviewer: hand the freshly-posted question to the extension
+    // host, which either reopens the page's primary (root) chat with the prompt
+    // staged, or answers headlessly — per the mode chosen in the Send ▾ menu
+    // (persisted in localStorage), falling back to the taskforge.respondMode
+    // setting. No-op in a plain browser or when auto-ask is off.
+    const host = inHost();
+    const primary = (data?.participants || []).find((p) => p.role === 'primary') || null;
+    // The Send ▾ method picker is hidden for now, so auto-ask always uses
+    // "open chat (paste)" (deeplink-root). Re-enable the picker in Thread.jsx to
+    // restore per-send mode selection from localStorage.
+    const mode = 'deeplink-root';
+    if (autoRespond && host) {
+      requestRespond({ id: currentId, target, text, primary, mode, authorMsgId: posted && posted.id });
+    }
     await refresh();
   }
 
@@ -248,6 +322,29 @@ export default function App() {
   async function removeAnchor(key) {
     await deleteAnchor(currentId, key);
     await refresh();
+  }
+
+  // Reopen a linked AI chat (feature: "link chats to the page"). For Claude this
+  // deep-links into the VS Code chat panel; other tools resolve to a configured
+  // resume command host-side.
+  function openParticipant(p) {
+    openChat({ tool: p.tool, sessionId: p.sessionId, cwd: p.cwd || null });
+  }
+  async function makePrimary(p) {
+    try { await setPrimaryParticipant(currentId, p.tool, p.sessionId); await refresh(); }
+    catch (e) { setError(e.message); }
+  }
+  async function unlinkParticipant(p) {
+    try { await deleteParticipant(currentId, p.tool, p.sessionId); await refresh(); }
+    catch (e) { setError(e.message); }
+  }
+
+  function toggleAutoRespond() {
+    setAutoRespond((v) => {
+      const next = !v;
+      try { localStorage.setItem('taskforge.autoRespond', next ? 'on' : 'off'); } catch { /* ignore */ }
+      return next;
+    });
   }
 
   if (error && !data) return <div className="app"><Banner error={error} /></div>;
@@ -277,9 +374,11 @@ export default function App() {
         <div className="header-right">
           {reviews.length > 0 && (
             <div className="task-switch-wrap">
-              <button className="task-switch" onClick={() => setPaletteOpen(true)} title="Switch task (⌘K)">
+              <button className="task-switch" onClick={() => setPaletteOpen(true)}
+                title={project ? `Switch task (⌘K) — scoped to project “${project}”` : 'Switch task (⌘K)'}>
                 {curMeta.starred && <span className="task-switch-star">★</span>}
                 <span className="task-switch-name">{curMeta.name || review.title}</span>
+                {project && <span className="task-switch-proj" title={`Picker scoped to “${project}”`}>⛃ {project}</span>}
                 <kbd className="task-switch-kbd">⌘K</kbd>
               </button>
               <button className="task-manage-btn" onClick={() => setManageOpen(true)} title="Manage tasks">⚙</button>
@@ -289,6 +388,19 @@ export default function App() {
             transparency={transparency} onTransparency={setTransparency}
             backdrop={backdrop} onBackdrop={setBackdrop}
             backdropOpacity={backdropOpacity} onBackdropOpacity={setBackdropOpacity} />
+          <ChatLinks participants={data.participants || []} onOpen={openParticipant}
+            onSetPrimary={makePrimary} onUnlink={unlinkParticipant} />
+          {inHost() && (
+            <button
+              className={`autorespond-toggle ${autoRespond ? 'on' : 'off'}`}
+              onClick={toggleAutoRespond}
+              title={autoRespond
+                ? 'Auto-ask the reviewer when you post a question (click to turn off)'
+                : 'Auto-ask is off — you post, then tell the chat to check threads (click to turn on)'}
+            >
+              {autoRespond ? '⚡ auto-ask on' : 'auto-ask off'}
+            </button>
+          )}
           <span className="poll-dot" title={`polling every ${POLL_MS / 1000}s`}>● live</span>
           {totalPending > 0 && <span className="header-pending">{totalPending} awaiting reviewer</span>}
         </div>
@@ -360,6 +472,7 @@ export default function App() {
       {findOpen && <FindBar onClose={() => setFindOpen(false)} />}
       {paletteOpen && (
         <CommandPalette reviews={reviews} tags={tags} currentId={currentId} onSelect={selectReview}
+          project={project} onProject={selectProject}
           onClose={() => setPaletteOpen(false)} onManage={() => setManageOpen(true)} />
       )}
       {manageOpen && (
@@ -420,7 +533,7 @@ function ReviewView({ review, byFile, threads, hunks, onSend, onDelete, onDelete
         )}
         <section className="general">
           <h2>General discussion</h2>
-          <Thread messages={threads.general || []} onSend={(t) => onSend('general', t)}
+          <Thread messages={threads.general || []} target="general" onSend={(t) => onSend('general', t)}
             onDelete={(mid) => onDelete('general', mid)} />
         </section>
 

@@ -13,8 +13,30 @@ import {
   mkdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { ensureAnnotationIds, annotationIds } from './annotations.mjs';
 import { liveDiff } from './livediff.mjs';
+
+// Which chat sessions are currently OPEN in a client — i.e. some process is
+// running `claude … --resume <sid>` (the interactive VS Code chat, or a headless
+// run). Used to grey out "Headless — same chat" when the page's root session is
+// live, since a session can't be resumed while a client holds it. Cached ~2s so
+// a burst of polls doesn't spawn ps repeatedly. Best-effort: any failure (no ps,
+// Windows, timeout) yields an empty set, so the UI just never disables — safe.
+let _openCache = { t: 0, set: new Set() };
+function openSessionSet() {
+  const now = Date.now();
+  if (now - _openCache.t < 2000) return _openCache.set;
+  const set = new Set();
+  try {
+    const out = execFileSync('ps', ['-Ao', 'args'], { encoding: 'utf8', timeout: 1500 });
+    const re = /--resume[ =]+([0-9a-fA-F-]{8,})/g;
+    let m;
+    while ((m = re.exec(out))) set.add(m[1]);
+  } catch { /* no ps / not supported → empty set */ }
+  _openCache = { t: now, set };
+  return set;
+}
 
 export function createApi(workDir) {
   // Per-review change-token cache for the live diff. Maps id -> { hash, mtime }.
@@ -292,6 +314,12 @@ export function createApi(workDir) {
       if (m && req.method === 'GET') {
         const data = load(m[1], { live: true });
         if (!data) return json(res, 404, { error: 'review not found' });
+        // Tag each linked chat with whether it's currently open (transient — GET
+        // only, never persisted). Lets the UI disable "Headless — same chat".
+        if (Array.isArray(data.participants) && data.participants.length) {
+          const openSet = openSessionSet();
+          data.participants = data.participants.map((p) => ({ ...p, open: openSet.has(p.sessionId) }));
+        }
         return json(res, 200, data);
       }
 
@@ -329,6 +357,40 @@ export function createApi(workDir) {
           answered: false,
         };
         data.threads[target].push(msg);
+        save(id, data);
+        return json(res, 200, msg);
+      }
+
+      // POST /api/review/:id/reviewer-reply  { target, text, answerMsgId? }
+      // Append a role:"reviewer" reply to a thread and mark the answered author
+      // message. Used by the extension's headless auto-respond: a headless model
+      // GENERATES the answer text (no file/tool permissions needed) and the
+      // extension posts it here, so the reply lands in the thread race-safely
+      // through the same atomic write as every other mutation.
+      m = path.match(/^\/api\/review\/([^/]+)\/reviewer-reply$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const body = await readBody(req);
+        const target = String(body.target || '');
+        const text = (body.text || '').trim();
+        if (!text) return json(res, 400, { error: 'text is required' });
+        const thread = data.threads && data.threads[target];
+        if (!thread) return json(res, 404, { error: `unknown thread: ${target}` });
+        // Mark the referenced author message answered, else the last still-open
+        // author message in this thread.
+        let ans = body.answerMsgId ? thread.find((x) => x.id === body.answerMsgId) : null;
+        if (!ans) { for (let i = thread.length - 1; i >= 0; i--) { if (thread[i].role === 'author' && !thread[i].answered) { ans = thread[i]; break; } } }
+        if (ans) ans.answered = true;
+        const msg = {
+          id: nextId(data, 'm'),
+          role: 'reviewer',
+          text,
+          ts: new Date().toISOString(),
+          answered: true,
+        };
+        thread.push(msg);
         save(id, data);
         return json(res, 200, msg);
       }
@@ -468,6 +530,97 @@ export function createApi(workDir) {
         ensureAnnotationIds(data); // give new annotations stable thread ids
         save(id, data);
         return json(res, 200, hunk.annotations);
+      }
+
+      // ── participants: the AI chats that took part in this task ──────────────
+      // A `participants` entry links a page to the AI session(s) that built or
+      // reviewed it, so the UI can reopen that exact chat (feature: "link chats
+      // to the page"). Tool-agnostic: each entry is { tool, sessionId, cwd,
+      // label, role, firstSeen, lastActive }. `role:"primary"` marks the root
+      // session that built the page (the context-bearing one the reviewer
+      // reopens); there is at most one primary.
+
+      // POST /api/review/:id/participants  { tool, sessionId, cwd?, label?, role? }
+      // Upsert (by tool+sessionId). First recorded participant becomes primary
+      // unless one already exists; role:"primary" in the body forces it (and
+      // demotes any current primary). Idempotent — re-recording just bumps
+      // lastActive. This is what the auto-record hook and the auto-responder call.
+      m = path.match(/^\/api\/review\/([^/]+)\/participants$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const body = await readBody(req);
+        const tool = String(body.tool || '').trim();
+        const sessionId = String(body.sessionId || '').trim();
+        if (!/^[a-z0-9][a-z0-9._-]{0,31}$/i.test(tool)) return json(res, 400, { error: 'bad tool' });
+        if (!/^[\w.:@/-]{1,200}$/.test(sessionId)) return json(res, 400, { error: 'bad sessionId' });
+        const label = body.label != null ? String(body.label).slice(0, 80) : null;
+        const cwd = body.cwd != null ? String(body.cwd).slice(0, 1024) : null;
+        const forcePrimary = body.role === 'primary';
+        const now = new Date().toISOString();
+        data.participants = Array.isArray(data.participants) ? data.participants : [];
+        const demote = () => { for (const p of data.participants) if (p.role === 'primary') p.role = 'participant'; };
+        const existing = data.participants.find((p) => p.tool === tool && p.sessionId === sessionId);
+        if (existing) {
+          existing.lastActive = now;
+          if (label) existing.label = label;
+          if (cwd) existing.cwd = cwd;
+          if (forcePrimary) { demote(); existing.role = 'primary'; }
+        } else {
+          const hasPrimary = data.participants.some((p) => p.role === 'primary');
+          const primary = forcePrimary || !hasPrimary;
+          if (primary) demote();
+          data.participants.push({
+            tool, sessionId, cwd, label,
+            role: primary ? 'primary' : 'participant',
+            firstSeen: now, lastActive: now,
+          });
+        }
+        save(id, data);
+        return json(res, 200, data.participants);
+      }
+
+      // POST /api/review/:id/participant-primary  { tool, sessionId }
+      // Re-designate which linked chat is the primary (root) session.
+      m = path.match(/^\/api\/review\/([^/]+)\/participant-primary$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const body = await readBody(req);
+        const tool = String(body.tool || '');
+        const sessionId = String(body.sessionId || '');
+        const list = Array.isArray(data.participants) ? data.participants : [];
+        const target = list.find((p) => p.tool === tool && p.sessionId === sessionId);
+        if (!target) return json(res, 404, { error: 'unknown participant' });
+        for (const p of list) p.role = 'participant';
+        target.role = 'primary';
+        save(id, data);
+        return json(res, 200, list);
+      }
+
+      // POST /api/review/:id/participant-delete  { tool, sessionId }
+      // Unlink a chat. If the primary was removed, promote the earliest-seen
+      // remaining participant so a page never silently loses its root anchor.
+      m = path.match(/^\/api\/review\/([^/]+)\/participant-delete$/);
+      if (m && req.method === 'POST') {
+        const id = m[1];
+        const data = load(id);
+        if (!data) return json(res, 404, { error: 'review not found' });
+        const body = await readBody(req);
+        const tool = String(body.tool || '');
+        const sessionId = String(body.sessionId || '');
+        const list = Array.isArray(data.participants) ? data.participants : [];
+        const idx = list.findIndex((p) => p.tool === tool && p.sessionId === sessionId);
+        if (idx === -1) return json(res, 404, { error: 'unknown participant' });
+        const [removed] = list.splice(idx, 1);
+        if (removed.role === 'primary' && list.length && !list.some((p) => p.role === 'primary')) {
+          list.slice().sort((a, b) => String(a.firstSeen).localeCompare(String(b.firstSeen)))[0].role = 'primary';
+        }
+        data.participants = list;
+        save(id, data);
+        return json(res, 200, list);
       }
 
       return json(res, 404, { error: 'no such api route' });

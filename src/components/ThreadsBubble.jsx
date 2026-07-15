@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Thread from './Thread.jsx';
+import ChatIcon from './ChatIcon.jsx';
 
 // A floating chat bubble (fixed bottom-right) that holds the threads index for
 // one tab. Scope decides what it shows and hides the other tab's threads:
@@ -103,7 +104,7 @@ export default function ThreadsBubble({
                     </div>
                     {expanded === c.key && (
                       <div className="tf-thread-body">
-                        <Thread messages={threads[c.key] || []} onSend={(t) => onSend(c.key, t)}
+                        <Thread messages={threads[c.key] || []} target={c.key} onSend={(t) => onSend(c.key, t)}
                           onDelete={onDelete && ((mid) => onDelete(c.key, mid))} compact />
                       </div>
                     )}
@@ -137,7 +138,7 @@ export default function ThreadsBubble({
       <button className={`tf-bubble-fab ${totalPending > 0 ? 'has-pending' : ''}`}
         onClick={() => setOpen((o) => !o)}
         title={isLog ? 'Log threads' : 'Review threads'}>
-        💬
+        <ChatIcon size={22} strokeWidth={1.9} />
         {totalPending > 0 && <span className="tf-bubble-fab-badge">{totalPending}</span>}
       </button>
     </div>

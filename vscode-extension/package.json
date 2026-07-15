@@ -95,6 +95,28 @@
           "type": "string",
           "default": "127.0.0.1",
           "description": "Host used to build the TaskForge URL rendered in the webview (e.g. 127.0.0.1 or taskforge)."
+        },
+        "taskforge.respondMode": {
+          "type": "string",
+          "default": "deeplink-root",
+          "enum": ["deeplink-root", "headless-root", "headless-reviewer", "off"],
+          "enumDescriptions": [
+            "Reopen the page's primary (root) chat in the chat panel with the question pre-filled — you press Enter. Full context, human-in-the-loop.",
+            "Headlessly resume the root chat (claude -p --resume) so it answers with zero keystrokes. Full context, but appends autonomous turns to that session.",
+            "Headlessly run a separate per-page reviewer session. Zero-touch and non-invasive, but starts context-light.",
+            "Never auto-trigger a reply — just post the question."
+          ],
+          "description": "What happens when you post a question in a TaskForge thread."
+        },
+        "taskforge.resumeCommand": {
+          "type": "string",
+          "default": "claude --resume ${sessionId}",
+          "description": "Terminal command used to reopen a non-Claude linked chat. Placeholders: ${sessionId}, ${cwd}, ${tool}."
+        },
+        "taskforge.claudeCliPath": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path to the Claude CLI used by the headless respond modes (the VS Code extension's bundled copy is not on PATH; install the standalone CLI or set an absolute path)."
         }
       }
     }

@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 // Custom tags can be used to sort/narrow: click a tag chip to filter to it (the
 // list then orders by manual order, then starred, then name), or type "#tag" in
 // the search box for the same effect from the keyboard.
-export default function CommandPalette({ reviews, tags = [], currentId, onSelect, onClose, onManage }) {
+export default function CommandPalette({ reviews, tags = [], currentId, onSelect, onClose, onManage, project = null, onProject }) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   const [tagFilter, setTagFilter] = useState(null);
@@ -25,6 +25,13 @@ export default function CommandPalette({ reviews, tags = [], currentId, onSelect
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [reviews]);
 
+  // Distinct project names in use — the top-level scope segments (All + each).
+  const allProjects = useMemo(() => {
+    const set = new Set();
+    for (const r of reviews) if (!r.hidden && r.project) set.add(r.project);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [reviews]);
+
   const rows = useMemo(() => {
     // A leading "#tag" token in the query acts as a tag filter too; the rest is text.
     let s = q.trim().toLowerCase();
@@ -34,6 +41,7 @@ export default function CommandPalette({ reviews, tags = [], currentId, onSelect
     const tag = tagFilter || typedTag;
     return reviews
       .filter((r) => !r.hidden)
+      .filter((r) => !project || (r.project || null) === project)
       .filter((r) => !tag || (r.tags || []).some((t) => t.toLowerCase() === tag.toLowerCase()))
       .filter((r) => !s || `${r.name || r.title} ${r.project || ''} ${(r.tags || []).join(' ')} ${r.id}`.toLowerCase().includes(s))
       .sort((a, b) => {
@@ -42,9 +50,9 @@ export default function CommandPalette({ reviews, tags = [], currentId, onSelect
         if (ao !== bo) return ao ? -1 : 1;
         return (b.starred ? 1 : 0) - (a.starred ? 1 : 0) || (a.name || a.title).localeCompare(b.name || b.title);
       });
-  }, [reviews, q, tagFilter]);
+  }, [reviews, q, tagFilter, project]);
 
-  useEffect(() => { setActive(0); }, [q, tagFilter]);
+  useEffect(() => { setActive(0); }, [q, tagFilter, project]);
   useEffect(() => {
     listRef.current?.querySelector('.cmdk-row.active')?.scrollIntoView({ block: 'nearest' });
   }, [active]);
@@ -61,6 +69,17 @@ export default function CommandPalette({ reviews, tags = [], currentId, onSelect
       <div className="cmdk" onMouseDown={(e) => e.stopPropagation()}>
         <input ref={inputRef} className="cmdk-input" placeholder="Switch task… (#tag to filter)"
           value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+        {allProjects.length > 0 && onProject && (
+          <div className="cmdk-projects" role="tablist" aria-label="Project scope">
+            <button className={`cmdk-proj-seg ${!project ? 'on' : ''}`}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => onProject(null)}>All</button>
+            {allProjects.map((p) => (
+              <button key={p} className={`cmdk-proj-seg ${project === p ? 'on' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onProject(project === p ? null : p)}>{p}</button>
+            ))}
+          </div>
+        )}
         {allTags.length > 0 && (
           <div className="cmdk-tags">
             {allTags.map((t) => (
@@ -81,7 +100,7 @@ export default function CommandPalette({ reviews, tags = [], currentId, onSelect
               {(r.tags || []).map((t) => (
                 <span key={t} className="cmdk-tag-chip" style={{ background: tagColor[t] || '#768390', color: '#fff', borderColor: 'transparent' }}>{t}</span>
               ))}
-              {r.project && <span className="cmdk-proj">{r.project}</span>}
+              {!project && r.project && <span className="cmdk-proj">{r.project}</span>}
               {r.id === currentId && <span className="cmdk-cur">current</span>}
             </button>
           ))}

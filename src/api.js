@@ -112,6 +112,38 @@ export async function deleteAnchor(id, key) {
   return r.json();
 }
 
+// Link an AI chat session to a page (upsert by tool+sessionId). `p` is
+// { tool, sessionId, cwd?, label?, role? }. Returns the full participants list.
+export async function recordParticipant(id, p) {
+  const r = await fetch(`/api/review/${encodeURIComponent(id)}/participants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(p),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to record participant');
+  return r.json();
+}
+
+export async function setPrimaryParticipant(id, tool, sessionId) {
+  const r = await fetch(`/api/review/${encodeURIComponent(id)}/participant-primary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tool, sessionId }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to set primary');
+  return r.json();
+}
+
+export async function deleteParticipant(id, tool, sessionId) {
+  const r = await fetch(`/api/review/${encodeURIComponent(id)}/participant-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tool, sessionId }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed to unlink chat');
+  return r.json();
+}
+
 export async function postAnnotations(id, target, annotations) {
   const r = await fetch(`/api/review/${encodeURIComponent(id)}/annotations`, {
     method: 'POST',

@@ -156,6 +156,192 @@ async function restartServer() {
   return startServer();
 }
 
+// ── AI chat linking + auto-respond ─────────────────────────────────────────────
+//
+// Two capabilities the sandboxed webview can't do itself, so it postMessages them
+// up here (see the relay in runningHtml):
+//   • open-chat — reopen a linked AI session. Claude gets a documented deep link
+//     straight into the VS Code chat panel; other tools fall back to a resume
+//     command in a terminal (taskforge.resumeCommand).
+//   • respond   — a question was just posted; trigger an AI reply per
+//     taskforge.respondMode (default: reopen the page's primary/root chat with the
+//     prompt pre-filled, so it answers with full context and you press Enter).
+
+// Claude Code deep link — resumes a specific session in the chat panel with the
+// prompt box pre-filled. `session` must belong to the current workspace; if it
+// isn't found Claude opens a fresh session (still with the prompt staged).
+// Docs: https://code.claude.com/docs/en/vs-code (URI handler).
+function claudeDeepLink({ sessionId, prompt } = {}) {
+  const qs = [];
+  if (sessionId) qs.push(`session=${encodeURIComponent(sessionId)}`);
+  if (prompt) qs.push(`prompt=${encodeURIComponent(prompt)}`);
+  return `vscode://anthropic.claude-code/open${qs.length ? '?' + qs.join('&') : ''}`;
+}
+
+function reviewerPrompt({ id, target, text }) {
+  return [
+    `A new question was posted in TaskForge on task "${id}", thread "${target}".`,
+    `Please answer it in the review: use the taskforge-review skill (scripts/answer.mjs)`,
+    `to append your reply to work/${id}/thread.json for thread "${target}".`,
+    ``,
+    `Question:`,
+    text || '',
+  ].join('\n');
+}
+
+// Open a linked chat. Claude → chat-panel deep link; anything else → a terminal
+// running the configured resume command with ${sessionId}/${cwd}/${tool} filled in.
+async function openChat({ tool, sessionId, cwd, prompt }) {
+  if (!tool || tool === 'claude') {
+    const uri = claudeDeepLink({ sessionId, prompt });
+    await vscode.env.openExternal(vscode.Uri.parse(uri));
+    return;
+  }
+  const tmpl = (vscode.workspace.getConfiguration('taskforge').get('resumeCommand') || 'claude --resume ${sessionId}').trim();
+  const cmd = tmpl
+    .replace(/\$\{sessionId\}/g, sessionId || '')
+    .replace(/\$\{cwd\}/g, cwd || '')
+    .replace(/\$\{tool\}/g, tool || '');
+  const term = vscode.window.createTerminal({ name: `TaskForge: ${tool}`, cwd: cwd || undefined });
+  term.show(true);
+  term.sendText(cmd, true);
+}
+
+// Trigger an AI reply to a just-posted question. `primary` is the page's root
+// participant (or null). `mode` (when sent) is a per-send override chosen from the
+// Send ▾ menu; otherwise the taskforge.respondMode setting applies.
+async function respond({ id, target, text, primary, mode, authorMsgId }) {
+  mode = mode || vscode.workspace.getConfiguration('taskforge').get('respondMode') || 'deeplink-root';
+  // Visible breadcrumb so it's obvious the extension received the send and which
+  // method it's running (if you see NO breadcrumb on send, the extension host is
+  // a stale build — do Developer: Reload Window, not just F5).
+  vscode.window.setStatusBarMessage(`$(comment) TaskForge: auto-ask → ${mode}`, 6000);
+  if (mode === 'off') return;
+  const prompt = reviewerPrompt({ id, target, text });
+
+  if (mode === 'deeplink-root') {
+    // Always stage the prompt on the clipboard first. The Claude deep link CANNOT
+    // inject a prompt into a session that's already open (it shows "Session is
+    // already open — enter it manually"), and the root chat is usually the one
+    // you're in. We can't detect that case or suppress that dialog, so the
+    // clipboard makes the fallback a single paste (⌘V, Enter).
+    try { await vscode.env.clipboard.writeText(prompt); } catch { /* best effort */ }
+    // Reopen the root chat (full context) in the panel with the prompt staged.
+    if (primary && (primary.tool === 'claude' || !primary.tool)) {
+      await vscode.env.openExternal(vscode.Uri.parse(claudeDeepLink({ sessionId: primary.sessionId, prompt })));
+    } else if (primary) {
+      await openChat({ tool: primary.tool, sessionId: primary.sessionId, cwd: primary.cwd, prompt });
+    } else {
+      // No linked root yet — open a fresh Claude chat with the prompt pre-filled.
+      await vscode.env.openExternal(vscode.Uri.parse(claudeDeepLink({ prompt })));
+    }
+    vscode.window.setStatusBarMessage(
+      '$(comment) TaskForge: question sent to chat — if it says "already open", paste (⌘V) & Enter',
+      6000,
+    );
+    return;
+  }
+
+  // Headless modes: the model GENERATES the answer text (no file/tool permissions
+  // needed) and we write it into the thread via /reviewer-reply. 'headless-root'
+  // resumes the page's root session so the answer has its full context (it appends
+  // to that session's transcript); 'headless-reviewer' runs a fresh session and
+  // relies on the context we inline into the prompt.
+  const resumeSid = mode === 'headless-root' && primary ? primary.sessionId : null;
+  const cwd = (primary && primary.cwd) || resolveRoot();
+  await runRespondHeadless({ id, target, text, resumeSid, cwd, authorMsgId });
+}
+
+// Resolve the Claude CLI: explicit setting → common install locations → bare
+// `claude` (relies on PATH). The bundled VS Code copy isn't exported to PATH.
+function resolveClaudeCli() {
+  const set = (vscode.workspace.getConfiguration('taskforge').get('claudeCliPath') || '').trim();
+  if (set) return set;
+  const home = process.env.HOME || '';
+  for (const c of [path.join(home, '.local/bin/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude']) {
+    try { if (c && fs.existsSync(c)) return c; } catch { /* keep looking */ }
+  }
+  return 'claude';
+}
+
+// Headless generate-then-write. Spawns `claude -p [--resume <sid>] <prompt>
+// --output-format json`, extracts the generated text, and POSTs it as the
+// reviewer reply. The prompt forbids tool use, so no permission prompts can stall
+// a non-interactive run. Also records the session it used as a participant.
+async function runRespondHeadless({ id, target, text, resumeSid, cwd, authorMsgId }) {
+  const cli = resolveClaudeCli();
+  const context = await buildThreadContext(id, target);
+  const prompt = [
+    `You are the TaskForge reviewer for task "${id}". Answer the newest question in thread "${target}".`,
+    `Reply with ONLY the answer, as Markdown. Do NOT use any tools, do not run commands, do not edit files —`,
+    `just produce the reply text; TaskForge will post it for you.`,
+    context ? `\nThread so far:\n${context}` : '',
+    `\nNewest question:\n${text}`,
+  ].join('\n');
+
+  const result = await new Promise((resolve) => {
+    const args = ['-p', prompt, '--output-format', 'json'];
+    if (resumeSid) args.unshift('--resume', resumeSid);
+    let child;
+    try { child = spawn(cli, args, { cwd, env: process.env }); }
+    catch (e) { vscode.window.showErrorMessage(`TaskForge auto-respond: could not launch "${cli}" — ${e.message}`); return resolve(null); }
+    let out = '', err = '';
+    const timer = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, 180000);
+    child.stdout && child.stdout.on('data', (d) => { out += d; });
+    child.stderr && child.stderr.on('data', (d) => { err += d; });
+    child.on('error', (e) => { clearTimeout(timer); vscode.window.showErrorMessage(`TaskForge auto-respond failed: ${e.message} (set taskforge.claudeCliPath?)`); resolve(null); });
+    child.on('close', () => { clearTimeout(timer); resolve({ out, err }); });
+  });
+  if (!result) return;
+
+  let answer = '', sid = '';
+  try { const j = JSON.parse(result.out); answer = String(j.result || '').trim(); sid = j.session_id || ''; }
+  catch { /* not JSON — fall through to the error path below */ }
+  if (!answer) {
+    vscode.window.showErrorMessage('TaskForge auto-respond: the model returned no answer (see Output). Falling back to none.');
+    return;
+  }
+  try { await postApi(`/api/review/${encodeURIComponent(id)}/reviewer-reply`, { target, text: answer, answerMsgId }); }
+  catch (e) { vscode.window.showErrorMessage(`TaskForge auto-respond: could not post the reply — ${e.message}`); return; }
+  if (sid) postApi(`/api/review/${encodeURIComponent(id)}/participants`, { tool: 'claude', sessionId: sid, cwd, label: 'reviewer' }).catch(() => {});
+  vscode.window.setStatusBarMessage('$(comment) TaskForge: reviewer answered', 4000);
+}
+
+// A compact transcript of a thread, to inline as context for the headless answer.
+async function buildThreadContext(id, target) {
+  try {
+    const data = await getApi(`/api/review/${encodeURIComponent(id)}`);
+    const msgs = (data && data.threads && data.threads[target]) || [];
+    return msgs.slice(-12).map((m) => `${m.role}: ${String(m.text || '').slice(0, 800)}`).join('\n');
+  } catch { return ''; }
+}
+
+// Minimal localhost JSON helpers against the running TaskForge server.
+function apiReq(method, path, body) {
+  const { port } = cfg();
+  const http = require('node:http');
+  return new Promise((resolve, reject) => {
+    const data = body != null ? JSON.stringify(body) : null;
+    const req = http.request(
+      { host: '127.0.0.1', port, path, method,
+        headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {} },
+      (res) => {
+        let out = '';
+        res.on('data', (c) => { out += c; });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) { try { resolve(out ? JSON.parse(out) : null); } catch { resolve(null); } }
+          else reject(new Error(`server ${res.statusCode}: ${out}`));
+        });
+      },
+    );
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+function getApi(path) { return apiReq('GET', path, null); }
+function postApi(path, body) { return apiReq('POST', path, body); }
+
 // ── webview ───────────────────────────────────────────────────────────────────
 
 // The editor panel renders the app (full width). The activity-bar icon is just a
@@ -197,8 +383,24 @@ function runningHtml(url) {
     const vscode = acquireVsCodeApi();
     window.addEventListener('message', (e) => {
       const m = e.data;
-      if (m && m.type === 'taskforge-clipboard-write' && typeof m.text === 'string') {
-        vscode.postMessage({ type: 'clipboard-write', text: m.text });
+      if (!m || typeof m.type !== 'string') return;
+      if (m.type.indexOf('taskforge-') === 0) {
+        // From the app iframe → relay up to the extension host.
+        if (m.type === 'taskforge-clipboard-write' && typeof m.text === 'string') {
+          vscode.postMessage({ type: 'clipboard-write', text: m.text });
+        } else if (m.type === 'taskforge-open-chat') {
+          vscode.postMessage({ type: 'open-chat', tool: m.tool, sessionId: m.sessionId, cwd: m.cwd, prompt: m.prompt });
+        } else if (m.type === 'taskforge-respond') {
+          vscode.postMessage({ type: 'respond', id: m.id, target: m.target, text: m.text, primary: m.primary, mode: m.mode, authorMsgId: m.authorMsgId });
+        } else if (m.type === 'taskforge-request-clipboard') {
+          vscode.postMessage({ type: 'request-clipboard', reqId: m.reqId });
+        } else if (m.type === 'taskforge-vscode-command') {
+          vscode.postMessage({ type: 'vscode-command', command: m.command });
+        }
+      } else if (m.type === 'clipboard-text') {
+        // From the extension host → relay DOWN into the app iframe (paste bridge).
+        const f = document.querySelector('iframe');
+        if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'taskforge-clipboard-text', reqId: m.reqId, text: m.text }, '*');
       }
     });
   </script>
@@ -259,6 +461,24 @@ function attach(webview) {
     } else if (msg && msg.type === 'clipboard-write' && typeof msg.text === 'string') {
       // ⌘C relayed up from the embedded app — the extension host can always write.
       try { await vscode.env.clipboard.writeText(msg.text); } catch { /* best effort */ }
+    } else if (msg && msg.type === 'open-chat') {
+      try { await openChat(msg); }
+      catch (e) { vscode.window.showErrorMessage(`TaskForge: could not open chat — ${e.message}`); }
+    } else if (msg && msg.type === 'respond') {
+      try { await respond(msg); }
+      catch (e) { vscode.window.showErrorMessage(`TaskForge: auto-respond failed — ${e.message}`); }
+    } else if (msg && msg.type === 'request-clipboard') {
+      // Paste bridge: read the system clipboard (always works in the host) and
+      // hand it back down to the app, which inserts it at the caret.
+      let text = '';
+      try { text = await vscode.env.clipboard.readText(); } catch { /* empty */ }
+      try { webview.postMessage({ type: 'clipboard-text', reqId: msg.reqId, text }); } catch { /* gone */ }
+    } else if (msg && msg.type === 'vscode-command' && typeof msg.command === 'string') {
+      // Forward a whitelisted VS Code command the focused webview would otherwise swallow.
+      const ALLOWED = new Set(['workbench.action.nextEditor', 'workbench.action.previousEditor', 'workbench.action.closeWindow']);
+      if (ALLOWED.has(msg.command)) {
+        try { await vscode.commands.executeCommand(msg.command); } catch { /* ignore */ }
+      }
     }
   });
 }

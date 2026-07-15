@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Thread from './Thread.jsx';
+import ChatIcon from './ChatIcon.jsx';
 import { captureSelection, locate, rectsOf, freshKey } from '../anchors.js';
 
 // Free-selection commenting over a Log page. Renders three things, all tagged
@@ -159,7 +160,7 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
           onMouseDown={(e) => e.preventDefault()}
           onClick={startDraft}
         >
-          💬 Comment
+          <ChatIcon size={13} /> Comment
         </button>
       )}
 
@@ -208,6 +209,7 @@ export default function CommentLayer({ pageRef, anchors, threads, version, onCre
           </div>
           <Thread
             messages={threads[openKey] || []}
+            target={openKey}
             onSend={(t) => onSend(openKey, t)}
             onDelete={onDelete && ((mid) => onDelete(openKey, mid))}
             compact

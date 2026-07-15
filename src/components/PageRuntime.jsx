@@ -151,7 +151,7 @@ export function buildTaskForge({ id, data, onSend, onDelete, onAnchor, onAnchorS
             {pending > 0 && <span className="page-thread-badge">{pending}</span>}
           </div>
         )}
-        <Thread messages={messages} onSend={(t) => onSend(target, t)}
+        <Thread messages={messages} target={target} onSend={(t) => onSend(target, t)}
           onDelete={onDelete && ((mid) => onDelete(target, mid))} compact={compact} />
       </div>
     );

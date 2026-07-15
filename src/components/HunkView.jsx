@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { diffLines } from '../diffLines.js';
 import { langForFile, highlight } from '../highlight.js';
 import Thread from './Thread.jsx';
+import ChatIcon from './ChatIcon.jsx';
 
 // One diff hunk: its added/removed lines (each line can host its own inline
 // thread), then each finding (annotation) with its own discussion thread, plus a
@@ -82,7 +83,7 @@ export default function HunkView({ hunk, threads, onSend, onDelete, onDeleteThre
                   <td className="code">
                     {renderCode(ln.text, lang)}
                     {msgs.length > 0 && (
-                      <span className="line-has-comments" title={`${msgs.length} comment(s)`}> 💬</span>
+                      <span className="line-has-comments" title={`${msgs.length} comment(s)`}> <ChatIcon size={12} /></span>
                     )}
                   </td>
                 </tr>
@@ -91,7 +92,7 @@ export default function HunkView({ hunk, threads, onSend, onDelete, onDeleteThre
                     <td colSpan={4}>
                       <Annotation ann={a} inline active={activeFinding === a.id}
                         messages={threads[a.id] || []} onSend={(t) => onSend(a.id, t)}
-                        onDelete={onDelete && ((mid) => onDelete(a.id, mid))} onToggle={() => toggleFinding(a)} />
+                        onDelete={onDelete && ((mid) => onDelete(a.id, mid))} onToggle={() => toggleFinding(a)} target={a.id} />
                     </td>
                   </tr>
                 ))}
@@ -100,7 +101,7 @@ export default function HunkView({ hunk, threads, onSend, onDelete, onDeleteThre
                     <td colSpan={4}>
                       <div className="line-thread">
                         <div className="line-thread-head">
-                          💬 Line {ln.newNo ?? ln.oldNo}
+                          <ChatIcon size={13} /> Line {ln.newNo ?? ln.oldNo}
                           {msgs.length > 0 && onDeleteThread && (
                             <button className="line-thread-delete" title="delete this whole line thread"
                               onClick={() => { if (window.confirm(`Delete all ${msgs.length} comment(s) on line ${ln.newNo ?? ln.oldNo}?`)) onDeleteThread(key); }}>
@@ -109,7 +110,7 @@ export default function HunkView({ hunk, threads, onSend, onDelete, onDeleteThre
                           )}
                           <button className="line-thread-close" title={hasMsgs ? 'collapse (keeps the comments)' : 'hide'} onClick={() => toggleLine(key, hasMsgs)}>×</button>
                         </div>
-                        <Thread messages={msgs} onSend={(t) => onSend(key, t)}
+                        <Thread messages={msgs} target={key} onSend={(t) => onSend(key, t)}
                           onDelete={onDelete && ((mid) => onDelete(key, mid))} compact />
                       </div>
                     </td>
@@ -124,18 +125,18 @@ export default function HunkView({ hunk, threads, onSend, onDelete, onDeleteThre
       {blockAnns.map((a) => (
         <Annotation key={a.id} ann={a} active={activeFinding === a.id}
           messages={threads[a.id] || []} onSend={(t) => onSend(a.id, t)}
-          onDelete={onDelete && ((mid) => onDelete(a.id, mid))} onToggle={() => toggleFinding(a)} />
+          onDelete={onDelete && ((mid) => onDelete(a.id, mid))} onToggle={() => toggleFinding(a)} target={a.id} />
       ))}
 
       <Discussion label="Hunk discussion" messages={threads[hunk.id] || []} onSend={(t) => onSend(hunk.id, t)}
-        onDelete={onDelete && ((mid) => onDelete(hunk.id, mid))} />
+        onDelete={onDelete && ((mid) => onDelete(hunk.id, mid))} target={hunk.id} />
     </div>
   );
 }
 
 // A finding plus the thread that follows it. Click the head to light up / clear
 // the lines it concerns.
-function Annotation({ ann, active, messages, onSend, onDelete, onToggle, inline }) {
+function Annotation({ ann, active, messages, onSend, onDelete, onToggle, inline, target }) {
   const sev = (ann.severity || 'note').toLowerCase();
   return (
     <div id={`f-${ann.id}`} className={`annotation sev-${sev} ${active ? 'annotation-active' : ''} ${inline ? 'annotation-inline' : ''}`}>
@@ -146,14 +147,14 @@ function Annotation({ ann, active, messages, onSend, onDelete, onToggle, inline 
         <span className="annotation-jump-hint">{active ? '✕ clear highlight' : '↦ highlight lines'}</span>
       </div>
       <div className="annotation-note">{ann.note}</div>
-      <Discussion label="Discuss" messages={messages} onSend={onSend} onDelete={onDelete} startOpenIfPending />
+      <Discussion label="Discuss" messages={messages} onSend={onSend} onDelete={onDelete} target={target} startOpenIfPending />
     </div>
   );
 }
 
 // Collapsible thread (per-finding or hunk-level). Opens by default when it has a
 // pending question.
-function Discussion({ label, messages, onSend, onDelete, startOpenIfPending }) {
+function Discussion({ label, messages, onSend, onDelete, startOpenIfPending, target }) {
   const pending = messages.filter((m) => m.role === 'author' && !m.answered).length;
   const [open, setOpen] = useState(() => (startOpenIfPending ? pending > 0 : false));
   return (
@@ -162,7 +163,7 @@ function Discussion({ label, messages, onSend, onDelete, startOpenIfPending }) {
         {open ? '▾' : '▸'} {label} ({messages.length})
         {pending > 0 && <span className="badge-pending">{pending} pending</span>}
       </button>
-      {open && <Thread messages={messages} onSend={onSend} onDelete={onDelete} compact />}
+      {open && <Thread messages={messages} onSend={onSend} onDelete={onDelete} target={target} compact />}
     </div>
   );
 }

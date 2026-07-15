@@ -174,6 +174,11 @@ code, pre, .code, .diff td.code, .review-meta code {
 .task-switch:hover { border-color: var(--muted); }
 .task-switch-star { color: #d9a521; }
 .task-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-switch-proj {
+  flex: none; font-size: 11px; color: var(--link); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 999px; padding: 0 7px;
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .task-switch-kbd {
   font-size: 10px; color: var(--muted); border: 1px solid var(--border);
   border-radius: 4px; padding: 0 4px; background: var(--bg);
@@ -225,6 +230,15 @@ code, pre, .code, .diff td.code, .review-meta code {
 .cmdk-tag:hover { color: var(--text); border-color: var(--muted); }
 .cmdk-tag.on { background: var(--link); border-color: var(--link); color: #fff; }
 .cmdk-tag-chip { flex: 0 0 auto; font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 1px 6px; }
+
+/* Top-level project scope — a segmented control (distinct from the #tag pills). */
+.cmdk-projects { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.cmdk-proj-seg {
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 7px; padding: 3px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 500;
+}
+.cmdk-proj-seg:hover { color: var(--text); border-color: var(--muted); }
+.cmdk-proj-seg.on { background: var(--link); border-color: var(--link); color: #fff; }
 
 /* ── in-page find bar (⌘F) ─────────────────────────────────────────────── */
 .findbar {
@@ -452,6 +466,99 @@ h2 { font-size: 15px; margin: 24px 0 10px; }
 }
 .thread-form button:disabled { opacity: .5; cursor: default; }
 .thread-pending-note { color: var(--medium); font-size: 12px; }
+
+/* Split "Send ▾" button — the caret picks the auto-ask method (persisted). */
+.thread-send { position: relative; display: inline-flex; align-items: stretch; }
+.thread-send-main.has-caret { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.thread-send .thread-send-caret {
+  background: var(--low); color: #0d1117; border: none; border-left: 1px solid rgba(0,0,0,.28);
+  border-radius: 0 6px 6px 0; padding: 0 8px; font-weight: 700; cursor: pointer; font-size: 12px;
+}
+.thread-send .thread-send-caret:disabled { opacity: .5; cursor: default; }
+.thread-send-menu {
+  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 30; min-width: 232px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 5px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.thread-send-menu-head, .thread-send-menu-foot { font-size: 10.5px; color: var(--muted); padding: 3px 6px; }
+.thread-send-menu-foot { border-top: 1px solid var(--border); margin-top: 4px; }
+.thread-send-menu .thread-send-opt {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  background: none; color: var(--text); border: none; border-radius: 5px;
+  padding: 6px; font: inherit; font-weight: 500; cursor: pointer;
+}
+.thread-send-menu .thread-send-opt:hover { background: var(--panel-2); }
+.thread-send-menu .thread-send-opt.active { color: var(--low); }
+.thread-send-menu .thread-send-opt.disabled { opacity: .5; cursor: not-allowed; }
+.thread-send-menu .thread-send-opt.disabled:hover { background: none; }
+.thread-send-opt-label { flex: 1; }
+.thread-send-opt-note {
+  font-size: 10px; color: var(--medium); border: 1px solid var(--border);
+  border-radius: 4px; padding: 0 5px; white-space: nowrap;
+}
+.thread-send-check { display: inline-block; width: 12px; color: var(--low); font-weight: 700; }
+
+/* Thread identifier chip — the unique key you reference in chat. */
+.thread-id { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.thread-id-label { text-transform: uppercase; letter-spacing: .05em; opacity: .8; }
+.thread-id-chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 6px; color: var(--text); font: inherit;
+}
+.thread-id-chip code { font-size: 11px; color: var(--link); }
+.thread-id-chip:hover { border-color: var(--muted); }
+.thread-id-chip.copied { border-color: var(--low); }
+.thread-id-copy { opacity: .6; font-size: 11px; }
+.thread-id-chip.copied .thread-id-copy { color: var(--low); opacity: 1; }
+
+/* Auto-respond toggle in the header. */
+.autorespond-toggle {
+  font-size: 11px; padding: 2px 8px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+}
+.autorespond-toggle:hover { border-color: var(--muted); }
+.autorespond-toggle.on { color: var(--low); border-color: var(--low); }
+
+/* Linked-chats index (header). */
+.chatlinks { position: relative; display: inline-flex; }
+.chatlinks-btn {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 8px; color: var(--text); font-size: 12px;
+}
+.chatlinks-btn:hover { border-color: var(--muted); }
+.chatlinks-count { color: var(--muted); font-weight: 600; }
+.chatlinks-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 320px; max-width: 460px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+.chatlinks-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 4px 6px; }
+.chatlinks-foot { font-size: 11px; color: var(--muted); padding: 5px 6px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.chatlinks-row { display: flex; align-items: center; gap: 4px; border-radius: 6px; }
+.chatlinks-row:hover { background: var(--panel-2); }
+.chatlinks-row.is-primary { background: color-mix(in srgb, var(--low) 8%, transparent); }
+.chatlinks-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  background: none; border: none; cursor: pointer; color: var(--text); font: inherit;
+  padding: 6px; text-align: left;
+}
+.chatlinks-tool {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700;
+  color: var(--link); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+}
+.chatlinks-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatlinks-sid { font-size: 11px; color: var(--muted); }
+.chatlinks-star { color: #d9a521; }
+.chatlinks-ago { font-size: 11px; color: var(--muted); opacity: .8; }
+.chatlinks-acts { display: flex; gap: 2px; padding-right: 4px; }
+.chatlinks-act {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 4px; opacity: .6;
+}
+.chatlinks-act:hover { opacity: 1; background: var(--bg); }
+.chatlinks-act-danger:hover { color: var(--blocker, #e5534b); }
 
 .general { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); padding: 0 0 4px; }
 .general h2 { margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--border); }
