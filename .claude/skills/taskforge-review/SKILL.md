@@ -62,6 +62,24 @@ node $S/answer.mjs --id <review-id> --msg <author-msg-id|next> --file reply.txt
 
 After writing, the open page shows the reply on its next poll — no restart, no refresh.
 
+**Register yourself as a participant** so the app lists this chat under 💬 and can reopen it
+(works from any repo — POSTs to the running server, auto-detects your session id):
+
+```bash
+node "$HOME/.claude/skills/taskforge-review/scripts/link-chat.mjs" --id <review-id> --label reviewer
+```
+
+> **Locating a thread by a bare id (e.g. the user pastes `log:mrem2el49ikc7`).**
+> `work/` is **gitignored**, so **`git grep` silently skips it** and you'll wrongly
+> conclude the thread "doesn't exist." Never use `git grep` to find TaskForge data.
+> Either run `list_pending.mjs --id <id>` (it reads `work/<id>/thread.json` directly),
+> or, when you don't know which task the id belongs to, plain-grep the files:
+> ```bash
+> grep -rl "log:mrem2el49ikc7" work/*/thread.json   # find the task; then answer.mjs on it
+> ```
+> `log:<hash>` keys are free-selection page comments; `log:<name>` keys are author-placed
+> `<taskforge.Thread>`s. Both live in the same `thread.json` and are answered the same way.
+
 ## Start / open the app
 
 Preferred — the **`taskforge` MCP controller** manages the server lifecycle (registered in

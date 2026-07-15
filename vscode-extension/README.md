@@ -27,6 +27,13 @@ live app once it's accepting connections.
   auto-detect from open workspace folders, then the extension's own location.
 - `taskforge.port` — default `7777` (mirrors `TASKFORGE_PORT`).
 - `taskforge.host` — host used to build the URL shown in the webview (e.g. `taskforge`).
+- `taskforge.respondMode` — what posting a question does: `deeplink-root` (default —
+  reopen the page's root chat in the panel with the prompt pre-filled), `headless-root`,
+  `headless-reviewer`, or `off`. See the main README "Linked chats & auto-respond".
+- `taskforge.resumeCommand` — terminal command to reopen a **non-Claude** linked chat.
+  Placeholders `${sessionId}`, `${cwd}`, `${tool}`. Default `claude --resume ${sessionId}`.
+- `taskforge.claudeCliPath` — Claude CLI used by the headless respond modes (default
+  `claude`; the extension's bundled copy isn't on `PATH`).
 
 ## Run it
 

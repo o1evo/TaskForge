@@ -10,6 +10,23 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+- **Linked chats.** `thread.json` now records the AI chat sessions that took part
+  in a task (`participants[]`, tool-agnostic). A **💬 chats** header control lists
+  them and reopens each one — for Claude, straight into the VS Code chat panel via
+  the `vscode://anthropic.claude-code/open?session=…` deep link. One is the
+  **primary (root)** session. Recorded automatically by a `PostToolUse` hook
+  ([.claude/settings.json](.claude/settings.json) → `bin/record-participant.mjs`).
+  New API: `POST /api/review/:id/participants`, `…/participant-primary`,
+  `…/participant-delete`.
+- **Thread ids.** Each thread now shows its unique key as a **copyable chip**, so
+  it's trivial to reference the exact thread in chat.
+- **Auto-respond on submit.** Posting a question can trigger an AI reply instead of
+  switching to the chat and saying "check the threads." New extension setting
+  `taskforge.respondMode` (`deeplink-root` *(default)* / `headless-root` /
+  `headless-reviewer` / `off`) plus an in-app **⚡ auto-ask** toggle. Default reopens
+  the page's root chat with the question pre-filled — full context, one keystroke.
+  Also adds `taskforge.resumeCommand` and `taskforge.claudeCliPath`.
+
 ## [0.1.3-beta.3]
 
 _Prerelease._

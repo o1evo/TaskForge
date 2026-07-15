@@ -188,7 +188,11 @@ for all three tabs is what pairs the work log, its diff, and its QA plan.
   ],
   "threads": {
     "<thread-key>": [ { "id", "role", "text", "ts", "answered" } ]
-  }
+  },
+  "participants": [
+    { "tool", "sessionId", "cwd", "label", "role": "primary|participant",
+      "firstSeen", "lastActive" }
+  ]
 }
 ```
 
@@ -216,6 +220,16 @@ for all three tabs is what pairs the work log, its diff, and its QA plan.
   (`open`/`resolved`/`hidden`). See [src/anchors.js](src/anchors.js) +
   [src/components/CommentLayer.jsx](src/components/CommentLayer.jsx).
 
+- **Participants** are the AI chat sessions that took part in the task (built the
+  page, reviewed the diff, answered a thread). Tool-agnostic — `tool` is any label
+  (`claude`, `gemini`, `openai`, …). Exactly one is `role:"primary"`: the **root**
+  session that built the page (the context-bearing one the reviewer reopens). The
+  UI lists them in a **💬 chats** header control and can reopen each one — for
+  Claude, straight into the VS Code chat panel via the
+  `vscode://anthropic.claude-code/open?session=…` deep link. They are recorded
+  automatically by the `PostToolUse` hook in [.claude/settings.json](.claude/settings.json)
+  → [bin/record-participant.mjs](bin/record-participant.mjs).
+
 Messages render **Markdown** via `marked` ([src/components/Markdown.jsx](src/components/Markdown.jsx)),
 with fenced code blocks Prism-highlighted ([src/highlight.js](src/highlight.js)).
 The same renderer backs `taskforge.Markdown` on a Log page and the whole QA Plan tab.
@@ -232,6 +246,9 @@ The same renderer backs `taskforge.Markdown` on a Log page and the whole QA Plan
 | POST | `/api/review/:id/anchors` | `{key, quote, prefix, suffix}` | create/update a free-selection Log comment anchor |
 | POST | `/api/review/:id/anchor-state` | `{key, state}` | set an anchor `open`/`resolved`/`hidden` |
 | POST | `/api/review/:id/annotations` | `{target, annotations}` | replace a hunk's annotations |
+| POST | `/api/review/:id/participants` | `{tool, sessionId, cwd?, label?, role?}` | link an AI chat (upsert by tool+sessionId; first one becomes `primary`) |
+| POST | `/api/review/:id/participant-primary` | `{tool, sessionId}` | re-designate the primary (root) chat |
+| POST | `/api/review/:id/participant-delete` | `{tool, sessionId}` | unlink a chat (promotes the earliest remaining if the primary went) |
 
 `target` is any thread key above; `/annotations` `target` is a hunk `id`.
 
@@ -348,6 +365,32 @@ code --install-extension taskforge-vscode-0.1.0.vsix
 ```
 
 See [vscode-extension/README.md](vscode-extension/README.md) for commands and settings.
+
+### Linked chats & auto-respond
+
+Because the extension hosts the app, it can do two things a plain browser tab can't
+— the app postMessages the request up to the extension host (same bridge as ⌘C):
+
+- **Reopen a linked chat.** The **💬 chats** header control lists the sessions
+  recorded on the task ([participants](#data-model-threadjson)). Click one and, for
+  Claude, it opens **in the VS Code chat panel** via the
+  `vscode://anthropic.claude-code/open?session=…` deep link; other tools resolve to
+  `taskforge.resumeCommand` in a terminal. Each thread also shows a **copyable
+  thread id** so you can reference the exact thread in chat.
+- **Auto-respond on submit.** Posting a question triggers an AI reply instead of
+  you switching to the chat and saying "check the threads." Controlled by
+  **`taskforge.respondMode`** (and the in-app **⚡ auto-ask** header toggle):
+  | mode | what happens |
+  |------|--------------|
+  | `deeplink-root` *(default)* | Reopen the page's **primary (root)** chat in the panel with the question **pre-filled** — full context, you press Enter. Falls back to a fresh chat (prompt staged) if the root session isn't in this workspace. |
+  | `headless-root` | `claude -p --resume <root>` answers with **zero keystrokes** (full context, but appends autonomous turns to the root session). |
+  | `headless-reviewer` | a separate per-page reviewer session answers headlessly (non-invasive, starts context-light). |
+  | `off` | just post the question. |
+
+  Headless modes need the standalone Claude CLI on `PATH` (or set
+  `taskforge.claudeCliPath`) — the extension's bundled copy isn't exported. A
+  headless reviewer registers its own session as a participant, so it becomes a
+  linkable chat too.
 
 ## Participating as the reviewer (Claude session)
 

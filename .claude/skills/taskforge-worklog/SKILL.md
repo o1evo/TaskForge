@@ -113,6 +113,22 @@ npm run review        # http://127.0.0.1:7777 (or http://taskforge:7777; set TAS
 
 The page renders **live**: edit `Page.jsx`, the app re-renders on its 3s poll — no restart.
 
+### Link this chat to the page (so it shows in the app's 💬 chats)
+
+Right after you create/first-edit `Page.jsx`, register **this** session as the page's
+**primary (root)** chat — the app then lists it and can reopen it later, and the auto-respond
+feature reopens it with full context:
+
+```bash
+node "$HOME/.claude/skills/taskforge-review/scripts/link-chat.mjs" --id <id> --primary
+```
+
+- It POSTs to the running server (127.0.0.1:$TASKFORGE_PORT) and auto-detects your session id,
+  so it works **from any repo** — no hook, no approval. Run it from your own session's cwd.
+- There is also an optional `PostToolUse` hook (`.claude/settings.json` → `bin/record-participant.mjs`)
+  that records participants automatically, but it only fires for **approved** hooks in sessions
+  **rooted in the CodeReviews repo** — this explicit call is the reliable, universal path.
+
 ## Authoring the page
 
 The page is real React you write for *this* task — not a markdown dump. The authoring contract,
