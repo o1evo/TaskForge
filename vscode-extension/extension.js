@@ -25,9 +25,12 @@ function cfg() {
 
 // The URL rendered in the webview. Host is configurable (e.g. an /etc/hosts
 // alias); the probe below always uses loopback since that's where it binds.
-function taskforgeUrl() {
+// Passing an id pins the webview to one task via ?id= (the app reads it as an
+// initial override — see src/App.jsx), which is how we get one editor tab per task.
+function taskforgeUrl(id) {
   const { host, port } = cfg();
-  return `http://${host}:${port}`;
+  const base = `http://${host}:${port}`;
+  return id ? `${base}/?id=${encodeURIComponent(id)}` : base;
 }
 
 // Locate the TaskForge repo: explicit config → an open workspace folder that looks
@@ -344,12 +347,12 @@ function postApi(path, body) { return apiReq('POST', path, body); }
 
 // ── webview ───────────────────────────────────────────────────────────────────
 
-// The editor panel renders the app (full width). The activity-bar icon is just a
-// launcher: clicking it reveals a tiny view that immediately opens this panel and
-// collapses the sidebar — so the icon behaves like an "open TaskForge in editor" button.
-let panel = null;          // vscode.WebviewPanel | null
-let pollTimer = null;
-let lastUp = null;
+// One editor tab per task (the Claude-Code model). The activity-bar icon opens a
+// native Tasks tree (see TasksProvider); clicking a task opens — or reveals — its
+// own editor panel, pinned to that task via ?id=. Nothing opens until you pick one.
+const panels = new Map();  // id -> { id, panel, title }
+let lastActiveId = null;    // which task panel is focused (F5 reload target)
+let lastUp = null;          // last server up/down we painted into panels
 
 function escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
 
@@ -451,13 +454,14 @@ function downHtml(url, starting) {
 </body></html>`;
 }
 
-// Wire the panel webview to the Start button message.
-function attach(webview) {
+// Wire a task panel's webview to the messages it can post up.
+function attach(entry) {
+  const webview = entry.panel.webview;
   webview.onDidReceiveMessage(async (msg) => {
     if (msg && msg.type === 'start') {
-      try { await render(true); await startServer(); }
+      try { await renderPanel(entry, true); await startServer(); }
       catch (e) { vscode.window.showErrorMessage(`TaskForge: ${e.message}`); }
-      await render(false);
+      await renderAllPanels(false);
     } else if (msg && msg.type === 'clipboard-write' && typeof msg.text === 'string') {
       // ⌘C relayed up from the embedded app — the extension host can always write.
       try { await vscode.env.clipboard.writeText(msg.text); } catch { /* best effort */ }
@@ -483,43 +487,43 @@ function attach(webview) {
   });
 }
 
-// Refresh the panel. `starting` paints the in-progress button state.
-async function render(starting) {
-  if (!panel) return;
+// Repaint one task panel. `starting` paints the in-progress Start button state.
+async function renderPanel(entry, starting) {
+  if (!entry || !entry.panel) return;
   const up = await isUp();
   lastUp = up;
-  const url = taskforgeUrl();
-  panel.webview.html = up ? runningHtml(url) : downHtml(url, !!starting);
+  entry.panel.webview.html = up
+    ? runningHtml(taskforgeUrl(entry.id))    // iframe pinned to this task
+    : downHtml(taskforgeUrl(), !!starting);  // "not running" card (base URL)
 }
 
-// Hard-reload the webview. Repainting the same HTML won't reload the iframe, so
-// blank it first, then repaint with a cache-busting query so the embedded app
-// reloads from scratch — the recovery path for a wedged view (F5).
+async function renderAllPanels(starting) {
+  for (const entry of panels.values()) await renderPanel(entry, starting).catch(() => {});
+}
+
+// Hard-reload the focused task panel. Repainting the same HTML won't reload the
+// iframe, so blank it first, then repaint with a cache-busting query so the
+// embedded app reloads from scratch — the recovery path for a wedged view (F5).
 async function reload() {
-  if (!panel) { await openPanel(); return; }
-  if (!(await isUp())) { await render(false); return; }
-  const url = taskforgeUrl();
-  const busted = url + (url.includes('?') ? '&' : '?') + 'r=' + Date.now();
-  panel.webview.html = '<!DOCTYPE html><html><body></body></html>';
-  panel.webview.html = runningHtml(busted);
+  const entry = lastActiveId ? panels.get(lastActiveId) : null;
+  if (!entry) return;
+  if (!(await isUp())) { await renderPanel(entry, false); return; }
+  const url = taskforgeUrl(entry.id);
+  const busted = url + '&r=' + Date.now();
+  entry.panel.webview.html = '<!DOCTYPE html><html><body></body></html>';
+  entry.panel.webview.html = runningHtml(busted);
 }
 
-function startPolling() {
-  if (pollTimer) return;
-  pollTimer = setInterval(async () => {
-    if (!panel) return stopPolling();
-    const up = await isUp();
-    if (up !== lastUp) await render(false); // reflect external start/stop
-  }, 3000);
-}
-
-function stopPolling() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-}
-
-async function openPanel() {
-  if (panel) { panel.reveal(vscode.ViewColumn.Active); return; }
-  panel = vscode.window.createWebviewPanel('taskforge', 'TaskForge', vscode.ViewColumn.Active, {
+// Open — or reveal — the editor tab for one task, pinned to it via ?id=.
+async function openTaskPanel(id, title) {
+  if (!id) return;
+  const existing = panels.get(id);
+  if (existing) {
+    existing.panel.reveal(existing.panel.viewColumn ?? vscode.ViewColumn.Active);
+    lastActiveId = id;
+    return;
+  }
+  const panel = vscode.window.createWebviewPanel('taskforge', title || id, vscode.ViewColumn.Active, {
     enableScripts: true,
     retainContextWhenHidden: true,
   });
@@ -527,37 +531,92 @@ async function openPanel() {
     light: vscode.Uri.file(path.join(__dirname, 'media', 'taskforge-tab-light.svg')),
     dark: vscode.Uri.file(path.join(__dirname, 'media', 'taskforge-tab-dark.svg')),
   };
-  panel.onDidDispose(() => { panel = null; stopPolling(); });
-  attach(panel.webview);
-  await render(false);
-  startPolling();
+  const entry = { id, panel, title: title || id };
+  panels.set(id, entry);
+  lastActiveId = id;
+  panel.onDidChangeViewState((e) => { if (e.webviewPanel.active) lastActiveId = id; });
+  panel.onDidDispose(() => {
+    panels.delete(id);
+    if (lastActiveId === id) lastActiveId = null;
+  });
+  attach(entry);
+  await renderPanel(entry, false);
 }
 
-// The activity-bar view is a launcher only: as soon as it becomes visible
-// (icon clicked), open the editor panel and collapse the sidebar, so the icon
-// acts like an "open TaskForge in editor" button rather than hosting the app itself.
-const sidebarProvider = {
-  resolveWebviewView(webviewView) {
-    webviewView.webview.options = { enableScripts: false };
-    webviewView.webview.html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
-<style>body{font-family:var(--vscode-font-family);color:var(--vscode-descriptionForeground);
-  padding:1rem;font-size:.85rem;line-height:1.5}</style></head>
-<body>Opening TaskForge in the editor…</body></html>`;
-    const launch = () => {
-      if (!webviewView.visible) return;
-      openPanel();
-      // Collapse the sidebar so the icon click reads as "open in editor".
-      vscode.commands.executeCommand('workbench.action.closeSidebar');
-    };
-    webviewView.onDidChangeVisibility(launch);
-    launch();
-  },
-};
+// ── Tasks tree (activity-bar sidebar) ──────────────────────────────────────────
+//
+// The native list that replaces the old launcher. It's fed by GET /api/reviews and
+// mirrors the ⌘K palette's ordering (manual order → starred → name). Clicking a row
+// opens that task's editor tab; the ⌘K palette inside the app is untouched.
+
+function sortReviews(list) {
+  return [...list].sort((a, b) => {
+    const ao = typeof a.order === 'number', bo = typeof b.order === 'number';
+    if (ao && bo) return a.order - b.order;
+    if (ao !== bo) return ao ? -1 : 1;
+    return (b.starred ? 1 : 0) - (a.starred ? 1 : 0) ||
+      String(a.name || a.title).localeCompare(String(b.name || b.title));
+  });
+}
+
+class TasksProvider {
+  constructor() {
+    this._emitter = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._emitter.event;
+    this.reviews = [];
+  }
+  refresh() { this._emitter.fire(); }
+  getTreeItem(el) { return el; }
+  async getChildren(element) {
+    if (!(await isUp())) return []; // server down → viewsWelcome "Start" shows instead
+    if (!element) {
+      let list = [];
+      try { list = await getApi('/api/reviews'); } catch { return []; }
+      this.reviews = (Array.isArray(list) ? list : []).filter((r) => !r.hidden);
+      const projects = [...new Set(this.reviews.map((r) => r.project).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+      const loose = sortReviews(this.reviews.filter((r) => !r.project)).map((r) => this.taskItem(r));
+      // Grouped by project when any task has one; project folders first, then loose tasks.
+      return projects.length ? [...projects.map((p) => this.projectItem(p)), ...loose] : loose;
+    }
+    if (element.contextValue === 'project') {
+      return sortReviews(this.reviews.filter((r) => r.project === element._project)).map((r) => this.taskItem(r));
+    }
+    return [];
+  }
+  projectItem(name) {
+    const item = new vscode.TreeItem(name, vscode.TreeItemCollapsibleState.Expanded);
+    item.id = 'project:' + name;
+    item.contextValue = 'project';
+    item._project = name;
+    item.iconPath = new vscode.ThemeIcon('folder');
+    return item;
+  }
+  taskItem(r) {
+    const label = r.name || r.title || r.id;
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    item.id = 'task:' + r.id;
+    item.contextValue = 'task';
+    item.description = (r.tags || []).map((t) => '#' + t).join(' ');
+    item.tooltip = `${label}${r.project ? ' · ' + r.project : ''}\n${r.id}`;
+    item.iconPath = new vscode.ThemeIcon(r.starred ? 'star-full' : (r.hasPage ? 'notebook' : 'git-pull-request'));
+    item.command = { command: 'taskforge.openTask', title: 'Open task', arguments: [r] };
+    return item;
+  }
+}
+
+let tasksProvider = null;
+
+// Reflect the server up/down into a context key (drives viewsWelcome) and, on any
+// transition, refresh the tree and repaint open panels.
+async function setServerContext(up) {
+  try { await vscode.commands.executeCommand('setContext', 'taskforge.serverUp', !!up); } catch { /* ignore */ }
+}
 
 // ── status bar ─────────────────────────────────────────────────────────────────
 
 let statusItem = null;
+let lastStatusUp = null;
 
 async function refreshStatusBar() {
   if (!statusItem) return;
@@ -565,6 +624,14 @@ async function refreshStatusBar() {
   statusItem.text = up ? '$(server) TaskForge' : '$(debug-disconnect) TaskForge';
   statusItem.tooltip = up ? `TaskForge running — ${taskforgeUrl()} (click to open)` : 'TaskForge stopped — click to open / start';
   statusItem.show();
+  // On an up/down transition, keep the tree, the viewsWelcome gate, and any open
+  // panels in sync — this 4s poll is the single heartbeat for the whole extension.
+  if (up !== lastStatusUp) {
+    lastStatusUp = up;
+    await setServerContext(up);
+    if (tasksProvider) tasksProvider.refresh();
+    await renderAllPanels(false);
+  }
 }
 
 // ── activation ───────────────────────────────────────────────────────────────
@@ -576,38 +643,59 @@ function activate(context) {
 
   const sbTimer = setInterval(refreshStatusBar, 4000);
   context.subscriptions.push({ dispose: () => clearInterval(sbTimer) });
+  setServerContext(false); // start hidden until the first probe confirms it's up
   refreshStatusBar();
 
+  tasksProvider = new TasksProvider();
+
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('taskforge.sidebar', sidebarProvider),
-    vscode.commands.registerCommand('taskforge.open', () => openPanel()),
+    vscode.window.registerTreeDataProvider('taskforge.tasks', tasksProvider),
+    // The icon / status bar just reveals the Tasks list — nothing opens fullscreen
+    // until you pick a task.
+    vscode.commands.registerCommand('taskforge.open', () => vscode.commands.executeCommand('taskforge.tasks.focus')),
+    vscode.commands.registerCommand('taskforge.refreshTasks', () => tasksProvider && tasksProvider.refresh()),
+    vscode.commands.registerCommand('taskforge.openTask', async (r) => {
+      const id = typeof r === 'string' ? r : (r && r.id);
+      if (!id) return;
+      if (!(await isUp())) {
+        const pick = await vscode.window.showInformationMessage("TaskForge server isn't running.", 'Start');
+        if (pick !== 'Start') return;
+        try { await startServer(); } catch (e) { return vscode.window.showErrorMessage(`TaskForge: ${e.message}`); }
+        await refreshStatusBar();
+      }
+      const title = (r && typeof r === 'object' && (r.name || r.title)) || id;
+      await openTaskPanel(id, title);
+    }),
     vscode.commands.registerCommand('taskforge.start', async () => {
       try {
         const r = await startServer();
         vscode.window.showInformationMessage(r.alreadyRunning ? 'TaskForge already running.' : 'TaskForge started.');
       } catch (e) { vscode.window.showErrorMessage(`TaskForge: ${e.message}`); }
       await refreshStatusBar();
-      if (panel) await render(false);
+      await renderAllPanels(false);
     }),
     vscode.commands.registerCommand('taskforge.stop', async () => {
       const r = await stopServer();
       vscode.window.showInformationMessage(r.stopped ? `TaskForge stopped (pid ${r.killed.join(', ')}).` : 'TaskForge was not running.');
       await refreshStatusBar();
-      if (panel) await render(false);
+      await renderAllPanels(false);
     }),
     vscode.commands.registerCommand('taskforge.restart', async () => {
       try { await restartServer(); vscode.window.showInformationMessage('TaskForge restarted.'); }
       catch (e) { vscode.window.showErrorMessage(`TaskForge: ${e.message}`); }
       await refreshStatusBar();
-      if (panel) await render(false);
+      await renderAllPanels(false);
     }),
-    vscode.commands.registerCommand('taskforge.openExternal', () => {
-      vscode.env.openExternal(vscode.Uri.parse(taskforgeUrl()));
+    vscode.commands.registerCommand('taskforge.openExternal', (r) => {
+      // From a task's inline action we get its metadata → open that task; from the
+      // command palette we get nothing → open the app root.
+      const id = r && typeof r === 'object' ? r.id : (typeof r === 'string' ? r : null);
+      vscode.env.openExternal(vscode.Uri.parse(taskforgeUrl(id)));
     }),
     vscode.commands.registerCommand('taskforge.refresh', () => reload()),
   );
 }
 
-function deactivate() { stopPolling(); }
+function deactivate() {}
 
 module.exports = { activate, deactivate };

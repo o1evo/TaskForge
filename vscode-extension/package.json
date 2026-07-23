@@ -33,17 +33,39 @@
     "views": {
       "taskforge": [
         {
-          "id": "taskforge.sidebar",
-          "name": "TaskForge",
-          "type": "webview"
+          "id": "taskforge.tasks",
+          "name": "Tasks"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "taskforge.tasks",
+        "contents": "The TaskForge server isn't running yet.\n[▶ Start TaskForge](command:taskforge.start)\nOnce it's up, your tasks appear here — click one to open it in an editor tab.",
+        "when": "!taskforge.serverUp"
+      },
+      {
+        "view": "taskforge.tasks",
+        "contents": "No tasks yet. Import a change to create one, then refresh.\n[↻ Refresh](command:taskforge.refreshTasks)",
+        "when": "taskforge.serverUp"
+      }
+    ],
     "commands": [
       {
         "command": "taskforge.open",
         "title": "TaskForge: Open",
         "category": "TaskForge"
+      },
+      {
+        "command": "taskforge.openTask",
+        "title": "TaskForge: Open task",
+        "category": "TaskForge"
+      },
+      {
+        "command": "taskforge.refreshTasks",
+        "title": "TaskForge: Refresh tasks",
+        "category": "TaskForge",
+        "icon": "$(refresh)"
       },
       {
         "command": "taskforge.start",
@@ -71,6 +93,22 @@
         "category": "TaskForge"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "taskforge.refreshTasks",
+          "when": "view == taskforge.tasks",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "taskforge.openExternal",
+          "when": "view == taskforge.tasks && viewItem == task",
+          "group": "inline"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "taskforge.refresh",

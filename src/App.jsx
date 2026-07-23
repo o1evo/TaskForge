@@ -173,10 +173,24 @@ export default function App() {
       .then((list) => {
         setReviews(list);
         if (list.length && !currentId) {
+          // The VS Code extension opens one editor tab per task and pins that tab
+          // to its task via ?id= (with an optional ?view=). A valid URL id wins
+          // over the per-client localStorage fallback, so each tab shows its own
+          // task; standalone browser use (no query string) is unaffected. We do
+          // NOT write the pinned id back to localStorage — that key is shared by
+          // every tab, and letting each tab clobber it would make them fight.
+          let pinnedId = null, pinnedView = null;
+          try {
+            const sp = new URLSearchParams(window.location.search);
+            pinnedId = sp.get('id');
+            pinnedView = sp.get('view');
+          } catch { /* no URL / SSR */ }
           let saved = null;
           try { saved = localStorage.getItem(CURRENT_KEY); } catch {}
-          const restored = saved && list.some((r) => r.id === saved) ? saved : list[0].id;
+          const valid = (x) => !!x && list.some((r) => r.id === x);
+          const restored = valid(pinnedId) ? pinnedId : valid(saved) ? saved : list[0].id;
           setCurrentId(restored);
+          if (pinnedView && ['log', 'review', 'qa'].includes(pinnedView)) setView(pinnedView);
         }
       })
       .catch((e) => setError(e.message));
