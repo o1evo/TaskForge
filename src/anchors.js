@@ -123,7 +123,6 @@ export function locate(container, anchor) {
     i = text.indexOf(q, i + 1);
   }
   if (hits.length === 0) return null;
-  if (hits.length === 1) return { start: hits[0], end: hits[0] + q.length };
 
   // Disambiguate by context: count matching trailing prefix / leading suffix chars.
   const score = (at) => {
@@ -132,13 +131,28 @@ export function locate(container, anchor) {
     return common(pre, anchor.prefix || '', true) + common(suf, anchor.suffix || '', false);
   };
   let best = hits[0];
-  let bestScore = -1;
-  for (const at of hits) {
+  let bestScore = score(hits[0]);
+  for (const at of hits.slice(1)) {
     const s = score(at);
     if (s > bestScore) { bestScore = s; best = at; }
   }
+
+  // Context gate: when we have surrounding context stored, a real re-attach keeps
+  // its immediate neighbours (the page moved but the text around the quote is
+  // intact), so it clears this bar. The SAME token on a different in-page tab —
+  // or an unrelated occurrence elsewhere — has different neighbours and fails it,
+  // so we orphan the anchor (flagged "outdated") instead of bleeding the comment
+  // onto unrelated text. Anchors with no stored context (legacy) skip the gate.
+  const ctxLen = (anchor.prefix || '').length + (anchor.suffix || '').length;
+  if (ctxLen > 0 && bestScore < Math.min(CONTEXT_MIN, ctxLen)) return null;
+
   return { start: best, end: best + q.length };
 }
+
+// Minimum matching context chars (prefix+suffix, counted from the quote outward)
+// required to trust a fuzzy re-attach. Low enough that a genuine edit still
+// re-attaches, high enough that a coincidental same-token hit on another tab does not.
+const CONTEXT_MIN = 6;
 
 // Count matching chars between a and b, aligned at the end (fromEnd) or start.
 function common(a, b, fromEnd) {
