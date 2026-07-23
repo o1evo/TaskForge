@@ -10,6 +10,25 @@ both.
 
 _Work landed on `main` but not yet tagged goes here._
 
+## [0.1.4-beta.2]
+
+_Prerelease._
+
+- **Task-list sidebar + one editor tab per task.** The activity-bar icon now opens
+  a native **Tasks** tree (fed by `GET /api/reviews`, grouped by project and ordered
+  like the ⌘K palette) instead of collapsing the sidebar and forcing the app
+  fullscreen. Nothing opens until you pick a task; clicking one opens — or reveals —
+  its own editor tab, pinned to that task via `?id=` (the app reads `?id=` and an
+  optional `?view=` as an initial override, falling back to the shared `localStorage`
+  key so standalone browser use is unchanged). A `viewsWelcome` **Start** button
+  shows when the server is down, gated on a new `taskforge.serverUp` context key.
+  The in-app ⌘K palette is unchanged.
+- Anchor re-attach now applies a **surrounding-context gate**: a fuzzy match must
+  keep enough of its stored prefix/suffix before it's trusted, so the same token on
+  a different in-page tab (or an unrelated occurrence) orphans the anchor — flagged
+  *outdated* — instead of bleeding the comment onto unrelated text. Legacy anchors
+  with no stored context skip the gate.
+
 ## [0.1.4-beta.1]
 
 _Prerelease._
@@ -95,7 +114,8 @@ Baseline release.
 - VS Code extension (webview panel + Start button + status bar).
 - Optional `taskforge` MCP controller for detached server lifecycle.
 
-[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.4-beta.1...HEAD
+[Unreleased]: https://github.com/o1evo/TaskForge/compare/v0.1.4-beta.2...HEAD
+[0.1.4-beta.2]: https://github.com/o1evo/TaskForge/compare/v0.1.4-beta.1...v0.1.4-beta.2
 [0.1.4-beta.1]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.3...v0.1.4-beta.1
 [0.1.3-beta.3]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.2...v0.1.3-beta.3
 [0.1.3-beta.2]: https://github.com/o1evo/TaskForge/compare/v0.1.3-beta.1...v0.1.3-beta.2
